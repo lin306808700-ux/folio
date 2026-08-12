@@ -1,0 +1,243 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Design Tokens — 明亮 / 暗黑双主题
+ * 组件统一使用语义化变量（经 tailwind.config.js 映射为 bg-surface / text-primary 等类），
+ * 切换主题只需切换 documentElement 上的 data-theme，所有颜色随之联动。
+ */
+:root,
+:root[data-theme='light'] {
+  /* 背景层级 */
+  --color-bg-base: 248 250 252;       /* slate-50 应用底色 */
+  --color-bg-surface: 255 255 255;    /* 卡片 / 面板 */
+  --color-bg-elevated: 241 245 249;   /* 抬升块 / 代码头 */
+  --color-bg-inset: 248 250 252;      /* 内陷区 */
+
+  /* 边框 */
+  --color-border-subtle: 226 232 240; /* slate-200 */
+  --color-border-strong: 203 213 225; /* slate-300 */
+
+  /* 文字 */
+  --color-text-primary: 15 23 42;     /* slate-900 */
+  --color-text-secondary: 51 65 85;   /* slate-700 */
+  --color-text-muted: 100 116 139;    /* slate-500 */
+  --color-text-faint: 148 163 184;    /* slate-400 */
+
+  /* 主题强调色 */
+  --color-accent: 124 58 237;         /* violet-600 */
+  --color-accent-soft: 139 92 246;    /* violet-500 */
+
+  /* 气泡 */
+  --color-bubble-user: 238 242 255;   /* indigo-50 用户气泡底 */
+  --color-bubble-user-text: 49 46 129;/* indigo-900 */
+
+  /* 滚动条 */
+  --scrollbar-thumb: 0 0 0 / 0.12;
+  --scrollbar-thumb-hover: 0 0 0 / 0.22;
+}
+
+:root[data-theme='dark'] {
+  --color-bg-base: 8 8 26;            /* 意识体深底 */
+  --color-bg-surface: 255 255 255;    /* 配合透明度使用：bg-surface/[0.06] */
+  --color-bg-elevated: 255 255 255;
+  --color-bg-inset: 15 17 30;
+
+  --color-border-subtle: 255 255 255; /* 配合透明度：border-subtle/[0.08] */
+  --color-border-strong: 255 255 255;
+
+  --color-text-primary: 255 255 255;
+  --color-text-secondary: 255 255 255;/* 配合透明度：text-secondary/85 */
+  --color-text-muted: 255 255 255;
+  --color-text-faint: 255 255 255;
+
+  --color-accent: 167 139 250;        /* violet-400 */
+  --color-accent-soft: 139 92 246;
+
+  --color-bubble-user: 255 255 255;
+  --color-bubble-user-text: 255 255 255;
+
+  --scrollbar-thumb: 255 255 255 / 0.08;
+  --scrollbar-thumb-hover: 255 255 255 / 0.15;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  @apply antialiased;
+  color: rgb(var(--color-text-primary));
+  background-color: rgb(var(--color-bg-base));
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.scroll-container {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* xterm 终端：背景透明，透出深海氛围光（配合 allowTransparency + rgba theme） */
+.xterm,
+.xterm .xterm-viewport,
+.xterm .xterm-screen {
+  background-color: transparent !important;
+}
+
+/* macOS 窗口拖拽区域 */
+.drag-region {
+  -webkit-app-region: drag;
+}
+.drag-region button,
+.drag-region a,
+.drag-region input {
+  -webkit-app-region: no-drag;
+}
+
+/* 自定义滚动条 — 跟随主题 */
+.scroll-container::-webkit-scrollbar {
+  width: 6px;
+}
+.scroll-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-container::-webkit-scrollbar-thumb {
+  background: rgb(var(--scrollbar-thumb));
+  border-radius: 3px;
+}
+.scroll-container::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--scrollbar-thumb-hover));
+}
+
+/* 自定义滚动条 — 深色侧边栏 */
+.scroll-dark::-webkit-scrollbar {
+  width: 4px;
+}
+.scroll-dark::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-dark::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+}
+.scroll-dark::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Markdown 渲染样式微调 */
+.markdown-body {
+  font-size: 15px;
+  line-height: 1.7;
+  word-break: break-word;
+}
+.markdown-body > *:first-child {
+  margin-top: 0 !important;
+}
+.markdown-body > *:last-child {
+  margin-bottom: 0 !important;
+}
+.markdown-body pre {
+  margin: 0;
+}
+
+/* 动画 */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-in {
+  animation: fade-in 0.2s ease-out;
+}
+@keyframes zoom-in-95 {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+.zoom-in-95 {
+  animation: zoom-in-95 0.15s ease-out;
+}
+
+/* 连接状态指示灯脉冲 */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(126, 231, 135, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 6px 3px rgba(126, 231, 135, 0.25);
+  }
+}
+.status-pulse {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* 状态仪表盘文字辉光 */
+@keyframes text-glow {
+  0%, 100% { opacity: 0.85; }
+  50% { opacity: 1; }
+}
+.status-glow {
+  animation: text-glow 3s ease-in-out infinite;
+}
+
+/* Muse Avatar 动画 */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-3px); }
+  40% { transform: translateX(3px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+
+/* 输入框 AI 响应中：边缘整体柔和呼吸 + 一道横向流动的紫色光带 */
+.chat-input-thinking {
+  animation: chat-input-breathe 2.6s ease-in-out infinite;
+}
+@keyframes chat-input-breathe {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.10), 0 6px 24px -10px rgba(139, 92, 246, 0.18); }
+  50% { box-shadow: 0 0 0 1px rgba(139, 92, 246, 0.28), 0 8px 32px -8px rgba(139, 92, 246, 0.32); }
+}
+.chat-input-thinking-sheen {
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(139, 92, 246, 0.10) 50%,
+    transparent 70%
+  );
+  background-size: 220% 100%;
+  animation: chat-input-sheen 2.6s linear infinite;
+}
+@keyframes chat-input-sheen {
+  0% { background-position: 180% 0; }
+  100% { background-position: -80% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chat-input-thinking,
+  .chat-input-thinking-sheen {
+    animation: none;
+  }
+}
+
+/* 侧边栏导航项过渡 */
+.nav-item {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.nav-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Logo 辉光效果 */
+.logo-glow {
+  box-shadow: 0 0 20px rgba(88, 213, 186, 0.15), 0 0 40px rgba(88, 213, 186, 0.05);
+}
+
+/* 学习图谱书页：抽屉内收紧 MarkdownRenderer 排版密度 */
+.learning-book .prose h2 { font-size: 14px; margin-top: 14px; }
+.learning-book .prose h3 { font-size: 13px; margin-top: 10px; }
+.learning-book .prose h4 { font-size: 12px; }
+.learning-book .prose p,
+.learning-book .prose li { font-size: 12px; line-height: 1.8; }
+.learning-book .prose pre { font-size: 11px; }

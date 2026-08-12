@@ -1,0 +1,187 @@
+'use strict'
+
+// 学习图谱「活的书」后台预生成管线。
+// 目标：用户打开节点时章节内容已就绪，无需等待实时撰写。
+//
+// 策略：
+// - 以每个图谱的 currentNodeId 为起点 BFS，优先预生成当前位置子树，再覆盖其余节点。
+// - 串行生成（底层 callAIStream 本就排队），每章之间留间隔，避免占满资源。
+// - 交互式调用（聊天/提问/手动撰写）优先：开跑前检测 isAiBusy 让路；
+//   用户手动请求同一节点时通过 abortCallsByLabel 抢占中断当前预生成。
+// - 用户下钻新建的子节点没有 content，会被自动纳入队列，实现「书自己长出来」。
+
+const { callAIStream, isAiBusy, abortCallsByLabel } = require('../../shared/ai-client')
+const { buildLearningPrompt } = require('./learning-prompts')
+const learningMaps = require('./learning-maps').store
+
+const LABEL = 'prefetch'
+const GENERATE_INTERVAL_MS = 8000 // 两章之间的喘息间隔
+const START_DELAY_MS = 15000 // 启动后延迟开跑，避开应用初始化高峰
+
+let _getWindow = null
+let _timer = null
+let _startTimeout = null
+let _current = null // { mapId, nodeId, title, controller }
+let _bump = null // 用户插队目标 { mapId, nodeId }
+let _doneSession = 0
+
+// 计算节点从根到自身的标题路径
+function getNodePath(map, nodeId) {
+  const byId = new Map(map.nodes.map(node => [node.id, node]))
+  const titles = []
+  const visited = new Set()
+  let cursor = byId.get(nodeId)
+  while (cursor && !visited.has(cursor.id)) {
+    titles.unshift(cursor.title)
+    visited.add(cursor.id)
+    cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined
+  }
+  return titles.join(' > ')
+}
+
+// 汇总所有图谱中缺正文的节点，按「当前位置子树优先」排序
+function buildQueue() {
+  const queue = []
+  for (const map of learningMaps.list()) {
+    const byParent = new Map()
+    map.nodes.forEach(node => {
+      const key = node.parentId || '__root__'
+      byParent.set(key, [...(byParent.get(key) || []), node])
+    })
+
+    const ordered = []
+    const visited = new Set()
+    const walk = id => {
+      (byParent.get(id) || []).forEach(child => {
+        if (visited.has(child.id)) return
+        visited.add(child.id)
+        ordered.push(child)
+        walk(child.id)
+      })
+    }
+    // 先当前位置节点及其子树，再其余节点
+    if (map.currentNodeId) {
+      const currentNode = map.nodes.find(node => node.id === map.currentNodeId)
+      if (currentNode && !visited.has(currentNode.id)) {
+        visited.add(currentNode.id)
+        ordered.push(currentNode)
+      }
+      walk(map.currentNodeId)
+    }
+    map.nodes.forEach(node => {
+      if (!visited.has(node.id)) {
+        visited.add(node.id)
+        ordered.push(node)
+      }
+    })
+
+    ordered
+      .filter(node => !(node.content && node.content.trim()))
+      .forEach(node => queue.push({ mapId: map.id, mapTitle: map.title, map, node }))
+  }
+
+  // 插队目标置顶
+  if (_bump) {
+    const idx = queue.findIndex(item => item.mapId === _bump.mapId && item.node.id === _bump.nodeId)
+    if (idx > 0) {
+      const [item] = queue.splice(idx, 1)
+      queue.unshift(item)
+    } else if (idx === -1) {
+      _bump = null // 目标已有正文或不存在，清掉
+    }
+  }
+  return queue
+}
+
+function getStatus() {
+  return {
+    active: Boolean(_current),
+    current: _current ? { mapId: _current.mapId, nodeId: _current.nodeId, title: _current.title } : null,
+    queueLeft: buildQueue().length,
+    doneSession: _doneSession,
+  }
+}
+
+function emitStatus(extra = {}) {
+  try {
+    const win = _getWindow ? _getWindow() : null
+    if (win && !win.isDestroyed()) {
+      win.webContents.send('muse:learning:prefetchStatus', { ...getStatus(), ...extra })
+    }
+  } catch (_) { /* 窗口状态竞态忽略 */ }
+}
+
+async function generateOne(item) {
+  const controller = new AbortController()
+  _current = { mapId: item.mapId, nodeId: item.node.id, title: item.node.title, controller }
+  emitStatus()
+
+  try {
+    const prompt = buildLearningPrompt({
+      kind: 'content',
+      mapTitle: item.mapTitle,
+      nodePath: getNodePath(item.map, item.node.id),
+      nodeTitle: item.node.title,
+    })
+    let content = ''
+    for await (const frame of callAIStream(prompt, { signal: controller.signal, label: LABEL })) {
+      content = frame.content || content
+    }
+    // 被交互请求抢占中断 → 不落盘，下一轮队列仍在，稍后重试
+    if (controller.signal.aborted) return
+    if (content && content.trim()) {
+      learningMaps.updateNode(item.mapId, item.node.id, { content })
+      _doneSession += 1
+      if (_bump && _bump.nodeId === item.node.id) _bump = null
+      console.log(`[LearningPrefetch] 已预制章节: ${item.node.title}（本次会话 ${_doneSession} 章）`)
+      emitStatus({ lastDone: { mapId: item.mapId, nodeId: item.node.id } })
+    }
+  } catch (error) {
+    if (!controller.signal.aborted) {
+      console.warn(`[LearningPrefetch] 预生成失败 ${item.node.title}:`, error.message)
+    }
+  } finally {
+    _current = null
+  }
+}
+
+function tick() {
+  if (_current) return
+  // 有交互调用在用 AI（聊天/提问/ReAct 等）→ 让路
+  if (isAiBusy([LABEL])) return
+  const queue = buildQueue()
+  if (queue.length === 0) return
+  generateOne(queue[0]).catch(() => {})
+}
+
+function start(getWindow, { delayMs = START_DELAY_MS, intervalMs = GENERATE_INTERVAL_MS } = {}) {
+  if (_timer || _startTimeout) return
+  _getWindow = getWindow
+  _startTimeout = setTimeout(() => {
+    _startTimeout = null
+    tick()
+    _timer = setInterval(tick, intervalMs)
+  }, delayMs)
+  console.log('[LearningPrefetch] 后台预生成管线已启动')
+}
+
+function stop() {
+  if (_startTimeout) { clearTimeout(_startTimeout); _startTimeout = null }
+  if (_timer) { clearInterval(_timer); _timer = null }
+  if (_current) _current.controller.abort()
+}
+
+// 用户手动撰写/打开节点时插队：优先该节点；若后台正在写同一章则让位
+function bump(mapId, nodeId) {
+  _bump = { mapId, nodeId }
+  if (_current && _current.mapId === mapId && _current.nodeId === nodeId) {
+    _current.controller.abort()
+  }
+}
+
+// 交互式 AI 调用开始前调用：抢占中断正在进行的预生成，避免用户排队等待
+function preemptForInteractive() {
+  return abortCallsByLabel(LABEL)
+}
+
+module.exports = { start, stop, bump, getStatus, preemptForInteractive, buildQueue, LABEL }

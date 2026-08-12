@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+build/
+release/
+src/renderer/dist/
+*.dmg
+*.exe
+*.AppImage
+
+# Config with secrets
+.env
+config/ai-api.json
+
+# Runtime data
+.ai-terminal/
+scripts/script_*
+
+# OS files
+.DS_Store
+**/.DS_Store
+Thumbs.db
+
+# Local archives
+*.zip
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test
+coverage/
+.nyc_output/

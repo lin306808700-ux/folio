@@ -1,0 +1,18 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      production-dependencies:
+        dependency-type: production
+      development-dependencies:
+        dependency-type: development
+  - package-ecosystem: npm
+    directory: /src/renderer
+    schedule:
+      interval: weekly
+    groups:
+      renderer-dependencies:
+        patterns: ["*"]
