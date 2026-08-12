@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, shell } = require('electron')
 
 // 品牌迁移（必须在任何业务模块读写数据目录前执行）：
-// userData：ai-terminal / AI Terminal → Folio；家目录：~/.ai-terminal → ~/.folio
+// userData：ai-terminal / AI Terminal → Folio
 const path = require('path')
 const fs = require('fs')
 try {
@@ -17,15 +17,12 @@ try {
       }
     }
   }
-  const legacyHome = path.join(app.getPath('home'), '.ai-terminal')
-  const folioHome = path.join(app.getPath('home'), '.folio')
-  if (fs.existsSync(legacyHome) && !fs.existsSync(folioHome)) {
-    fs.renameSync(legacyHome, folioHome)
-    console.log('[Main] 已迁移数据目录 ~/.ai-terminal → ~/.folio')
-  }
 } catch (error) {
   console.warn('[Main] 数据目录迁移失败:', error.message)
 }
+// 家目录迁移（~/.ai-terminal → ~/.folio，含双目录并存的图谱合并）：
+// config.js 在 require 时自行执行，这里提前加载确保先于任何 ~/.folio 读写
+require('./muse/config')
 
 // 过滤 macOS 系统级 Electron 噪音日志，不影响其他输出
 const originalStderrWrite = process.stderr.write.bind(process.stderr)

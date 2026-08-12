@@ -3,13 +3,71 @@
 const fs = require('fs')
 const path = require('path')
 
-// 一次性迁移：旧版数据目录 ~/.ai-terminal → ~/.folio（新目录不存在时才迁移，不覆盖）
+// 节点级并集合并学习图谱：有正文者优先，都有则取更新时间新的
+function mergeLearningMaps(legacyFile, targetFile) {
+  const pickNode = (a, b) => {
+    const aHas = a.content && a.content.trim()
+    const bHas = b.content && b.content.trim()
+    if (aHas && !bHas) return a
+    if (bHas && !aHas) return b
+    return String(b.updatedAt || 0) >= String(a.updatedAt || 0) ? b : a
+  }
+  const legacy = JSON.parse(fs.readFileSync(legacyFile, 'utf8'))
+  const target = JSON.parse(fs.readFileSync(targetFile, 'utf8'))
+  if (!Array.isArray(legacy) || !Array.isArray(target)) return false
+  const merged = []
+  for (const legacyMap of legacy) {
+    const targetMap = target.find(map => map.id === legacyMap.id)
+    if (!targetMap) { merged.push(legacyMap); continue }
+    const nodes = new Map()
+    for (const node of legacyMap.nodes) nodes.set(node.id, node)
+    for (const node of targetMap.nodes) {
+      nodes.set(node.id, nodes.has(node.id) ? pickNode(nodes.get(node.id), node) : node)
+    }
+    merged.push({
+      ...legacyMap,
+      nodes: [...nodes.values()],
+      currentNodeId: targetMap.currentNodeId || legacyMap.currentNodeId,
+      updatedAt: targetMap.updatedAt,
+    })
+  }
+  for (const targetMap of target) {
+    if (!legacy.some(map => map.id === targetMap.id)) merged.push(targetMap)
+  }
+  const temporaryFile = `${targetFile}.tmp`
+  fs.writeFileSync(temporaryFile, JSON.stringify(merged, null, 2), 'utf8')
+  fs.renameSync(temporaryFile, targetFile)
+  return true
+}
+
+// 一次性迁移：旧版数据目录 ~/.ai-terminal → ~/.folio
+// - 新目录不存在：整体改名
+// - 两目录并存（新目录已被先行初始化）：合并学习图谱，缺失子目录补齐；旧目录保留作备份
 try {
   const legacyHome = path.join(process.env.HOME, '.ai-terminal')
   const folioHome = path.join(process.env.HOME, '.folio')
-  if (fs.existsSync(legacyHome) && !fs.existsSync(folioHome)) {
-    fs.renameSync(legacyHome, folioHome)
-    console.log('[Muse] 已迁移数据目录 ~/.ai-terminal → ~/.folio')
+  if (fs.existsSync(legacyHome)) {
+    if (!fs.existsSync(folioHome)) {
+      fs.renameSync(legacyHome, folioHome)
+      console.log('[Muse] 已迁移数据目录 ~/.ai-terminal → ~/.folio')
+    } else {
+      const legacyStore = path.join(legacyHome, 'muse', 'learning-maps.json')
+      const targetStore = path.join(folioHome, 'muse', 'learning-maps.json')
+      if (fs.existsSync(legacyStore)) {
+        if (!fs.existsSync(targetStore)) {
+          fs.mkdirSync(path.dirname(targetStore), { recursive: true })
+          fs.renameSync(legacyStore, targetStore)
+        } else if (mergeLearningMaps(legacyStore, targetStore)) {
+          console.log('[Muse] 已合并旧版学习图谱数据到 ~/.folio')
+        }
+      }
+      for (const entry of fs.readdirSync(legacyHome)) {
+        if (!fs.existsSync(path.join(folioHome, entry))) {
+          fs.renameSync(path.join(legacyHome, entry), path.join(folioHome, entry))
+        }
+      }
+      console.log('[Muse] 旧目录 ~/.ai-terminal 保留作备份，确认无误后可手动删除')
+    }
   }
 } catch (error) {
   console.warn('[Muse] 数据目录迁移失败:', error.message)
