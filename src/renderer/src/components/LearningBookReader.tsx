@@ -69,6 +69,7 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
   const [qaDraft, setQaDraft] = useState<QaDraft | null>(null)
   const [toolbar, setToolbar] = useState<SelectionToolbar | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
+  const qaPanelRef = useRef<HTMLDivElement | null>(null)
   const reqRef = useRef<ActiveRequest | null>(null)
   // 事件回调里读取最新上下文，避免闭包过期
   const ctxRef = useRef({ node, mapId, mapTitle, nodePath, onChanged, notify })
@@ -203,6 +204,8 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
   }
 
   const startDrill = async (selection?: string) => {
+    // 清除选区：避免后续 mouseup 回调把浮动工具条重新浮出
+    window.getSelection()?.removeAllRanges()
     setToolbar(null)
     setDrilling(true)
     const ok = await startRequest('drill', selection ? { selection } : {})
@@ -237,8 +240,12 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
   }
 
   const openAskPanel = (selectionText: string) => {
+    // 清除选区：避免后续 mouseup 回调把浮动工具条重新浮出
+    window.getSelection()?.removeAllRanges()
     setToolbar(null)
     setQaDraft({ selection: selectionText, question: '', answer: '', streaming: false })
+    // 面板挂在正文下方，自动滚入视线并聚焦输入框
+    setTimeout(() => qaPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60)
   }
 
   const submitAsk = async () => {
@@ -303,6 +310,7 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
 
       {/* 圈选提问面板 */}
       {qaDraft && (
+        <div ref={qaPanelRef}>
         <Card
           size="small"
           className="mt-3 bg-transparent"
@@ -313,6 +321,7 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
             {qaDraft.selection}
           </blockquote>
           <Input.TextArea
+            autoFocus
             className="mt-2"
             rows={2}
             value={qaDraft.question}
@@ -336,6 +345,7 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
             </div>
           )}
         </Card>
+        </div>
       )}
 
       {/* 历史问答沉淀 */}
