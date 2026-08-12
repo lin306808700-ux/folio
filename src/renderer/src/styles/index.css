@@ -241,3 +241,25 @@ body {
 .learning-book .prose p,
 .learning-book .prose li { font-size: 12px; line-height: 1.8; }
 .learning-book .prose pre { font-size: 11px; }
+
+/* 学习知识树：展开箭头与节点标题严格垂直对齐，行高统一 */
+.learning-tree.ant-tree { font-size: 12px; }
+.learning-tree .ant-tree-treenode { align-items: center; padding: 1px 0; }
+.learning-tree .ant-tree-indent-unit { width: 14px; }
+.learning-tree .ant-tree-switcher {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  line-height: 1;
+}
+.learning-tree .ant-tree-switcher .ant-tree-switcher-icon { font-size: 9px; }
+.learning-tree .ant-tree-node-content-wrapper {
+  display: flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 6px;
+  line-height: 1.4;
+  border-radius: 6px;
+}
+.learning-tree .ant-tree-title { display: block; flex: 1; min-width: 0; }

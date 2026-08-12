@@ -326,6 +326,7 @@ export default function LearningMapPage() {
               />
             </div>
             <Tree
+              className="learning-tree"
               blockNode
               defaultExpandAll
               selectedKeys={selectedNode ? [selectedNode.id] : []}
