@@ -34,7 +34,7 @@ class TokenMonitor {
     this._recentInputsMax = 20
 
     // ═══ 上下文长度追踪 ═══
-    // 基础长度：首次请求时注入的默认上下文（systemPrompt + 画像 + 技能等）
+    // 基础长度：首次请求时注入的默认上下文（systemPrompt + 画像等）
     // 增量长度：每次对话额外增加的上下文（用户输入 + AI 响应 + 搜索结果等）
     this._contextStats = {
       baseLength: 0,           // 基础上下文长度（字符数）
@@ -43,7 +43,7 @@ class TokenMonitor {
       incrementalTokens: 0,    // 累计增量 Token 估算
       totalLength: 0,          // 总长度 = 基础 + 增量
       totalTokens: 0,          // 总 Token = 基础 + 增量
-      breakdown: {},           // 各部分长度明细 { systemPrompt, memory, skills, ... }
+      breakdown: {},           // 各部分长度明细 { systemPrompt, memory, template, ... }
       roundCount: 0,           // 对话轮次
     }
   }
@@ -324,27 +324,25 @@ class TokenMonitor {
    * @param {number} breakdown.envContext - 环境上下文长度
    * @param {number} breakdown.workspaceContext - 工作区上下文长度
    * @param {number} breakdown.memoryContext - 记忆上下文长度
-   * @param {number} breakdown.skillListContext - 技能清单长度
-   * @param {number} breakdown.skillContext - 激活技能长度
+   * @param {number} breakdown.scriptTemplateContext - 脚本模板上下文长度
+   * @param {number} breakdown.templateContext - 场景模板上下文长度
    * @param {number} breakdown.browserContext - 浏览器上下文长度
    * @param {number} breakdown.userInput - 用户输入长度
    * @param {number} breakdown.searchContext - 搜索结果长度
    * @param {number} breakdown.scriptExecContext - 脚本执行结果长度
-   * @param {number} breakdown.mentionedSkillContext - 提及技能长度
    */
   recordBaseContext(breakdown) {
     const baseLength = (breakdown.systemPrompt || 0) +
       (breakdown.envContext || 0) +
       (breakdown.workspaceContext || 0) +
       (breakdown.memoryContext || 0) +
-      (breakdown.skillListContext || 0) +
-      (breakdown.skillContext || 0)
+      (breakdown.scriptTemplateContext || 0) +
+      (breakdown.templateContext || 0)
 
     const incrementalLength = (breakdown.userInput || 0) +
       (breakdown.searchContext || 0) +
       (breakdown.scriptExecContext || 0) +
-      (breakdown.browserContext || 0) +
-      (breakdown.mentionedSkillContext || 0)
+      (breakdown.browserContext || 0)
 
     this._contextStats.baseLength = baseLength
     this._contextStats.baseTokens = this.estimateTokens('x'.repeat(baseLength))
@@ -395,8 +393,8 @@ class TokenMonitor {
     this._contextStats.totalTokens = this._contextStats.baseTokens
     this._contextStats.roundCount = 0
     // 保留 breakdown 中的基础部分，清空动态部分
-    const { systemPrompt, envContext, workspaceContext, memoryContext, skillListContext, skillContext } = this._contextStats.breakdown
-    this._contextStats.breakdown = { systemPrompt, envContext, workspaceContext, memoryContext, skillListContext, skillContext }
+    const { systemPrompt, envContext, workspaceContext, memoryContext, scriptTemplateContext, templateContext } = this._contextStats.breakdown
+    this._contextStats.breakdown = { systemPrompt, envContext, workspaceContext, memoryContext, scriptTemplateContext, templateContext }
 
     console.log(`[TokenMonitor] 增量已重置，保留基础上下文: ${this._contextStats.baseLength} 字`)
     this._pushContextStats()

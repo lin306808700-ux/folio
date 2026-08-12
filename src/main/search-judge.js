@@ -6,10 +6,9 @@
 function judgeNeedSearch(userInput) {
   const input = userInput.trim()
 
-  // 排除：命令类操作、技能安装、纯技术问答
+  // 排除：命令类操作、纯技术问答
   const excludePatterns = [
     /^(ls|cd|pwd|cat|grep|find|mkdir|rm|cp|mv|git|npm|docker|curl|brew|pip)\b/i,
-    /安装.*技能|保存.*技能/,
     /什么是.{1,10}$/, // 短句"什么是X"通常是知识问答
     /^(怎么|如何|为什么).{0,15}(写|用|配置|安装|设置|实现|创建)/,
     /今天(星期|周|几号|几月|什么日子)/,

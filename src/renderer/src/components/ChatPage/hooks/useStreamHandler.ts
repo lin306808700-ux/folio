@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import type { Message } from '../types'
 import { detectCommand } from '../utils'
-import { parseSkillInstall, parseSkillSave, parseSkillUpdate, parseCommandOptions, parseRichForm, parseArtifact } from './response-parser'
+import { parseCommandOptions, parseRichForm, parseArtifact } from './response-parser'
 
 // 句末标点（中英）— 刷到这些时给一个呼吸停顿
 const SENTENCE_END = /[。！？.!?；;]\s*$/
@@ -42,10 +42,7 @@ interface UseStreamHandlerOptions {
   setLoading: React.Dispatch<React.SetStateAction<boolean>>
   setLatency: (v: number) => void
   setPendingCommand: React.Dispatch<React.SetStateAction<string | undefined>>
-  refreshSkills: () => void
   setContextInfo: React.Dispatch<React.SetStateAction<{ mode: 'full' | 'light'; size: number; firstFullSize: number }>>
-  skillEditMode?: { id: string; name: string; content: string; description?: string; isNew?: boolean } | null
-  setSkillEditMode?: (s: any) => void
 }
 
 export function useStreamHandler(options: UseStreamHandlerOptions) {
@@ -54,10 +51,7 @@ export function useStreamHandler(options: UseStreamHandlerOptions) {
     setLoading,
     setLatency,
     setPendingCommand,
-    refreshSkills,
-    setContextInfo,
-    skillEditMode,
-    setSkillEditMode
+    setContextInfo
   } = options
 
   const [isStreaming, setIsStreaming] = useState(false)
@@ -459,156 +453,6 @@ export function useStreamHandler(options: UseStreamHandlerOptions) {
         } catch (e) { console.error('解析脚本数据失败:', e) }
       }
 
-      // 检测技能安装
-      const installSkillData = parseSkillInstall(response)
-      if (installSkillData) {
-        setMessages(prev => prev.map(msg =>
-          msg.id === msgId
-            ? {
-                ...msg,
-                content: `🎯 检测到技能安装请求\n仓库：${installSkillData.url}\n技能：${installSkillData.skillName || '默认'}`,
-                type: 'skill_install' as const,
-                skillData: installSkillData
-              }
-            : msg
-        ))
-        setLoading(false)
-        return
-      }
-
-      // 检测技能保存
-      const hasSaveSkillKeyword = response.includes('SAVE_SKILL:')
-      const saveSkillData = parseSkillSave(response)
-
-      if (hasSaveSkillKeyword && !saveSkillData) {
-        // AI 输出了 SAVE_SKILL 指令但 JSON 解析失败，自动请求重试
-        console.error('[SAVE_SKILL] JSON 解析失败，原始响应片段:', response.substring(response.indexOf('SAVE_SKILL:'), response.indexOf('SAVE_SKILL:') + 200))
-        setMessages(prev => prev.map(msg =>
-          msg.id === msgId
-            ? { ...msg, content: `⚠️ 技能 JSON 解析失败，正在请求 AI 重新生成...`, type: 'text' as const }
-            : msg
-        ))
-        setLoading(false)
-        // 自动触发重试：让 AI 修复 JSON
-        setTimeout(() => {
-          if (window.electronAPI) {
-            const retryMsgId = `msg-retry-skill-${Date.now()}`
-            setMessages(prev => [...prev, {
-              id: retryMsgId,
-              role: 'assistant' as const,
-              content: '🔄 正在重新生成技能...',
-              type: 'text' as const
-            }])
-            window.electronAPI.ai.sendMessage(
-              '上一次输出的 SAVE_SKILL JSON 格式有误导致解析失败。请重新输出技能，注意：content 字段内的所有换行必须用 \\n 转义，双引号必须用 \\" 转义，确保整个 SAVE_SKILL: {...} 是合法的单行 JSON。',
-              { retryMsgId }
-            ).catch((e: Error) => {
-              setMessages(prev => prev.map(msg =>
-                msg.id === retryMsgId ? { ...msg, content: `❌ 重试失败：${e.message}`, type: 'error' as const } : msg
-              ))
-            })
-          }
-        }, 500)
-        return
-      }
-
-      if (saveSkillData && window.electronAPI) {
-        window.electronAPI.db.skills.saveLocal({
-          name: saveSkillData.name,
-          description: saveSkillData.description || '',
-          content: saveSkillData.content
-        }).then(result => {
-          if (result.success) {
-            setMessages(prev => prev.map(msg =>
-              msg.id === msgId
-                ? { ...msg, content: `✅ 技能「${saveSkillData.name}」已保存成功！\n\n描述：${saveSkillData.description || '无'}\n\n已添加到技能矩阵，可在输入框左侧选择使用。`, type: 'text' as const }
-                : msg
-            ))
-            refreshSkills()
-          } else {
-            // saveLocal 返回 success: false，显示错误
-            setMessages(prev => prev.map(msg =>
-              msg.id === msgId
-                ? { ...msg, content: `❌ 技能保存失败：${result.error || '未知错误'}`, type: 'error' as const }
-                : msg
-            ))
-          }
-        }).catch(e => {
-          setMessages(prev => prev.map(msg =>
-            msg.id === msgId ? { ...msg, content: `❌ 技能保存失败：${e.message}`, type: 'error' as const } : msg
-          ))
-        })
-        setLoading(false)
-        return
-      }
-
-      // 检测技能更新
-      const skillUpdateResult = parseSkillUpdate(response)
-      if (skillUpdateResult && window.electronAPI) {
-        const { data: skillUpdateData, textBefore } = skillUpdateResult
-        if (textBefore) {
-          setMessages(prev => prev.map(msg =>
-            msg.id === msgId ? { ...msg, content: textBefore, type: 'text' as const, webSearched } : msg
-          ))
-        }
-
-        // 优先用 id 精确匹配（编辑模式下 skillEditMode.id 最可靠），fallback 到 name 匹配
-        const resolveTargetSkill = async () => {
-          const allSkills = await window.electronAPI!.db.skills.getAll()
-
-          // 1. 优先用 SKILL_UPDATE 中的 id
-          if (skillUpdateData.id) {
-            const byId = allSkills.find((s: any) => s.id === skillUpdateData.id)
-            if (byId) return byId
-          }
-
-          // 2. 编辑模式下用 skillEditMode.id
-          if (skillEditMode?.id) {
-            const byEditId = allSkills.find((s: any) => s.id === skillEditMode.id)
-            if (byEditId) return byEditId
-          }
-
-          // 3. fallback: name 匹配
-          return allSkills.find((s: any) => s.name === skillUpdateData.name) || null
-        }
-
-        resolveTargetSkill().then(async (targetSkill) => {
-          if (targetSkill) {
-            // 构建更新数据（支持 description 更新）
-            const updatePayload: Record<string, string> = { content: skillUpdateData.content }
-            if (skillUpdateData.description) {
-              updatePayload.description = skillUpdateData.description
-            }
-
-            await window.electronAPI!.db.skills.update(targetSkill.id, updatePayload)
-            const successMsg: Message = {
-              id: `skill-update-${Date.now()}`, role: 'assistant',
-              content: `✅ 技能「${skillUpdateData.name}」已更新成功！`, type: 'text'
-            }
-            setMessages(prev => [...prev, successMsg])
-            refreshSkills()
-
-            // 同步编辑模式状态（用 id 匹配，更可靠）
-            if (skillEditMode && setSkillEditMode && (skillEditMode.id === targetSkill.id || skillEditMode.name === skillUpdateData.name)) {
-              setSkillEditMode({
-                ...skillEditMode,
-                content: skillUpdateData.content,
-                ...(skillUpdateData.description ? { description: skillUpdateData.description } : {})
-              })
-            }
-          } else {
-            console.error('[SKILL_UPDATE] 未找到匹配的技能:', skillUpdateData.name, skillUpdateData.id)
-            const errorMsg: Message = {
-              id: `skill-update-error-${Date.now()}`, role: 'assistant',
-              content: `❌ 未找到技能「${skillUpdateData.name}」，更新失败`, type: 'text'
-            }
-            setMessages(prev => [...prev, errorMsg])
-          }
-        }).catch(e => console.error('[SKILL_UPDATE] 更新失败:', e))
-        setLoading(false)
-        return
-      }
-
       // 检测统一产物指令（ARTIFACT）
       const artifactData = parseArtifact(response)
       if (artifactData) {
@@ -744,7 +588,7 @@ export function useStreamHandler(options: UseStreamHandlerOptions) {
       }
       typewriterBufferRef.current = ''
     }
-  }, [skillEditMode, setSkillEditMode])
+  }, [])
 
   // 停止生成
   const stopGeneration = async () => {

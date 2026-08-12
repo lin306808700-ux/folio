@@ -1,13 +1,12 @@
 import React, { useState } from 'react'
 import { Play, Loader2, RefreshCw, CheckCircle, AlertCircle, ShieldCheck, ShieldClose } from 'lucide-react'
 import { ScriptPreview } from '../ScriptPreview'
-import { SaveScriptAsSkill } from '../SaveScriptAsSkill'
 import { RollbackButton } from '../parts/RollbackButton'
 import { useMessageBubbleContext } from '../MessageBubbleContext'
 
 /** script 类型消息渲染 — 含 6 种 execStatus 状态 */
 export function ScriptContent() {
-  const { msg, isElectron, onExecuteScript, onSkillsSaved } = useMessageBubbleContext()
+  const { msg, isElectron, onExecuteScript } = useMessageBubbleContext()
 
   if (msg.type !== 'script' || !msg.scriptData || !isElectron) return null
 
@@ -20,7 +19,7 @@ export function ScriptContent() {
         lang={scriptData.lang}
         filename={scriptData.filename}
       />
-      <ScriptStatusRenderer scriptData={scriptData} onExecuteScript={onExecuteScript} onSkillsSaved={onSkillsSaved} />
+      <ScriptStatusRenderer scriptData={scriptData} onExecuteScript={onExecuteScript} />
     </div>
   )
 }
@@ -29,11 +28,9 @@ export function ScriptContent() {
 function ScriptStatusRenderer({
   scriptData,
   onExecuteScript,
-  onSkillsSaved,
 }: {
   scriptData: NonNullable<import('../../types').Message['scriptData']>
   onExecuteScript: (runCommand: string) => void
-  onSkillsSaved: () => void
 }) {
   switch (scriptData.execStatus) {
     case 'executing':
@@ -75,7 +72,6 @@ function ScriptStatusRenderer({
               <CheckCircle size={14} />
               <span className="text-sm font-medium">执行完成</span>
             </div>
-            <SaveScriptAsSkill scriptData={scriptData} onSaved={onSkillsSaved} />
             {scriptData.snapshot && (
               <RollbackButton snapshot={scriptData.snapshot} />
             )}
@@ -134,7 +130,6 @@ function ScriptStatusRenderer({
           >
             <Play size={14} /> 执行脚本
           </button>
-          <SaveScriptAsSkill scriptData={scriptData} onSaved={onSkillsSaved} />
           <span className="text-xs text-slate-400 font-mono truncate max-w-[200px]" title={scriptData.scriptFile}>
             {scriptData.filename}
           </span>

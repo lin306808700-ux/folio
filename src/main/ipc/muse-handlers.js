@@ -314,7 +314,7 @@ function registerMuseHandlers(mainWindow) {
     // 使用 museAgent 的路径保存
     const fs = require('fs')
     const path = require('path')
-    const tasksFile = path.join(process.env.HOME, '.ai-terminal/muse/tasks.json')
+    const tasksFile = path.join(process.env.HOME, '.folio/muse/tasks.json')
     fs.writeFileSync(tasksFile, JSON.stringify(filteredTasks, null, 2))
     
     return true

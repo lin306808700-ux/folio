@@ -1,5 +1,5 @@
 import React from 'react'
-import { Play, Sparkles, Loader2, Activity, Globe } from 'lucide-react'
+import { Play, Activity, Globe } from 'lucide-react'
 import { BrowserScreenshot } from '../BrowserScreenshot'
 import { looksLikeCommand } from '../message-utils'
 import { useMessageBubbleContext } from '../MessageBubbleContext'
@@ -14,23 +14,6 @@ export function WebSearchBadge() {
     <div className="flex items-center gap-1.5 mb-2 text-[11px] font-bold text-cyan-600">
       <Globe size={12} /> 联网搜索
     </div>
-  )
-}
-
-/** 技能安装按钮 */
-export function SkillInstallContent() {
-  const { msg, loading, isElectron, onInstallSkill } = useMessageBubbleContext()
-
-  if (msg.type !== 'skill_install' || msg.role !== 'assistant' || !isElectron || !msg.skillData) return null
-
-  return (
-    <button
-      onClick={() => onInstallSkill(msg.skillData!)}
-      disabled={loading}
-      className="mt-3 flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-all shadow-sm active:scale-95 disabled:opacity-50"
-    >
-      {loading ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />} 安装技能
-    </button>
   )
 }
 

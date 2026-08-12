@@ -6,9 +6,7 @@
 const fileTool = require('./file');
 const commandTool = require('./command');
 const memoryTool = require('./memory');
-const skillTool = require('./skill');
 const webSearchTool = require('./websearch');
-const skillhubTool = require('./skillhub');
 const cliTools = require('./cli-tools');
 const pythonTool = require('./python');
 const envCheckerTool = require('./env-checker');
@@ -27,9 +25,7 @@ class ToolRegistry {
     this.register('command', commandTool);
     this.register('memory', memoryTool);
     // 功能减法：browser（内置浏览器自动化）与 arch-designer（变更分析）已下线，文件保留不注册
-    this.register('skill', skillTool);
     this.register('websearch', webSearchTool);
-    this.register('skillhub', skillhubTool);
     this.register('cli-tools', cliTools);
     this.register('python', pythonTool);
     this.register('env-checker', envCheckerTool);
@@ -283,27 +279,6 @@ class ToolRegistry {
         description: '自动检测并关闭页面上的遮罩、浮层、新手引导、弹窗等。支持查找关闭按钮、隐藏高z-index遮罩层、发送ESC键等策略'
       },
       {
-        name: 'skillInstall',
-        tool: 'skill',
-        method: 'install',
-        params: { url: '技能仓库URL', skillName: '技能名称' },
-        description: '从URL安装技能'
-      },
-      {
-        name: 'skillIsInstalled',
-        tool: 'skill',
-        method: 'isInstalled',
-        params: { name: '技能名称' },
-        description: '检查技能是否已安装'
-      },
-      {
-        name: 'skillList',
-        tool: 'skill',
-        method: 'list',
-        params: {},
-        description: '列出已安装的技能'
-      },
-      {
         name: 'webSearch',
         tool: 'websearch',
         method: 'search',
@@ -316,34 +291,6 @@ class ToolRegistry {
         method: 'searchAndAnalyze',
         params: { keywords: '搜索关键词', limit: '结果数量限制' },
         description: '执行网络搜索并整理结果，用于后续分析'
-      },
-      {
-        name: 'skillhubCliIsInstalled',
-        tool: 'skillhub',
-        method: 'cliIsInstalled',
-        params: {},
-        description: '检查 SkillHub CLI 是否已安装'
-      },
-      {
-        name: 'skillhubInstallCli',
-        tool: 'skillhub',
-        method: 'installCli',
-        params: {},
-        description: '安装 SkillHub CLI（仅 CLI）'
-      },
-      {
-        name: 'skillhubInstallSkill',
-        tool: 'skillhub',
-        method: 'installSkill',
-        params: { name: '技能名称' },
-        description: '使用 SkillHub CLI 安装指定技能'
-      },
-      {
-        name: 'skillhubSearch',
-        tool: 'skillhub',
-        method: 'search',
-        params: { keyword: '搜索关键词' },
-        description: '使用 SkillHub CLI 搜索技能'
       },
       // === CLI Tools: 文件与文本处理 ===
       {
@@ -515,7 +462,7 @@ class ToolRegistry {
         tool: 'env-checker',
         method: 'precheck',
         params: { requires: '所需工具名数组', pythonPackages: '所需 Python 包名数组', cwd: '工作目录（可选）' },
-        description: '技能执行前环境预检：检测工具和 Python 包是否就绪，返回 ready 状态和 issues 列表'
+        description: '执行前环境预检：检测工具和 Python 包是否就绪，返回 ready 状态和 issues 列表'
       }
     ].filter(d => !HIDDEN_TOOLS.has(d.tool));
   }

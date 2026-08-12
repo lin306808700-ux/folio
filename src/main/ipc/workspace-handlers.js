@@ -234,7 +234,7 @@ function collectQuickScripts(workspacePath, pkgScripts) {
 }
 
 // Workspace 配置存储路径
-const WORKSPACE_CONFIG_PATH = path.join(process.env.HOME, '.ai-terminal', 'workspace.json');
+const WORKSPACE_CONFIG_PATH = path.join(process.env.HOME, '.folio', 'workspace.json');
 
 /**
  * 读取当前工作区配置

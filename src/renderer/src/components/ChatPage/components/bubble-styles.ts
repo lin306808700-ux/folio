@@ -14,7 +14,6 @@ export function getBubbleClassName(msg: Message): string {
     command: 'px-6 py-4 bg-emerald-500/10 text-emerald-600 dark:text-emerald-200 border border-emerald-400/20 font-mono text-sm rounded-tl-none',
     command_options: 'px-6 py-4 bg-violet-500/10 text-text-secondary border border-violet-400/20 rounded-tl-none',
     script: 'px-6 py-4 bg-violet-500/10 text-violet-600 dark:text-violet-200 border border-violet-400/20 rounded-tl-none',
-    skill_install: 'px-6 py-4 bg-amber-500/10 text-amber-600 dark:text-amber-200 border border-amber-400/20 rounded-tl-none',
     error: 'px-6 py-4 bg-red-500/10 text-red-500 dark:text-red-300 border border-red-400/20 rounded-tl-none',
   }
 

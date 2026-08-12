@@ -7,30 +7,20 @@ import { useCommandExecutor } from './useCommandExecutor'
 interface UseChatMessagesOptions {
   isElectron: boolean
   sessionIdRef: React.MutableRefObject<string>
-  selectedSkill: any
-  setSelectedSkill: (s: any) => void
   setLatency: (v: number) => void
   setSafetyLevel: (v: 'SECURE' | 'CAUTION' | 'DANGER') => void
-  refreshSkills: () => void
   resetSession: () => Promise<void>
   recordInput: (text: string) => void
-  skillEditMode?: { id: string; name: string; content: string; description?: string; isNew?: boolean } | null
-  setSkillEditMode?: (s: any) => void
 }
 
 export function useChatMessages(options: UseChatMessagesOptions) {
   const {
     isElectron,
     sessionIdRef,
-    selectedSkill,
-    setSelectedSkill,
     setLatency,
     setSafetyLevel,
-    refreshSkills,
     resetSession,
-    recordInput,
-    skillEditMode,
-    setSkillEditMode
+    recordInput
   } = options
 
   const [messages, setMessages] = useState<Message[]>([])
@@ -116,10 +106,7 @@ export function useChatMessages(options: UseChatMessagesOptions) {
     setLoading,
     setLatency,
     setPendingCommand,
-    refreshSkills,
-    setContextInfo,
-    skillEditMode,
-    setSkillEditMode
+    setContextInfo
   })
 
   // 命令执行
@@ -127,7 +114,6 @@ export function useChatMessages(options: UseChatMessagesOptions) {
     executeCommand,
     executeScript,
     executeSpecificCommand,
-    installSkill,
     confirmTaskAction
   } = useCommandExecutor({
     messages,
@@ -138,8 +124,7 @@ export function useChatMessages(options: UseChatMessagesOptions) {
     setPendingCommand,
     commandToExecute,
     setCommandToExecute,
-    setSafetyLevel,
-    refreshSkills
+    setSafetyLevel
   })
 
   // 监听搜索状态事件
@@ -307,8 +292,6 @@ export function useChatMessages(options: UseChatMessagesOptions) {
         selectedText: quotedContent,
       } : undefined,
       images: images && images.length > 0 ? images : undefined,
-      skillId: skillEditMode ? skillEditMode.id : selectedSkill?.id,
-      skillPrompt: skillEditMode ? skillEditMode.content : selectedSkill?.content,
     }
     userMessage = envelope.text
     quotedContent = envelope.quote?.selectedText
@@ -340,9 +323,6 @@ export function useChatMessages(options: UseChatMessagesOptions) {
     setLoading(true)
 
     try {
-      const effectiveSkillPrompt = envelope.skillPrompt
-      const effectiveSkillId = envelope.skillId
-      
       let question = userMessage
       if (quotedContent) {
         const boundedQuote = quotedContent.slice(0, 8000)
@@ -372,10 +352,7 @@ export function useChatMessages(options: UseChatMessagesOptions) {
       callAIStream(
         question,
         sessionIdRef.current,
-        effectiveSkillPrompt,
         undefined,
-        effectiveSkillId,
-        skillEditMode || undefined,
         existingMessages,
         images && images.length > 0 ? images : undefined
       )
@@ -390,7 +367,7 @@ export function useChatMessages(options: UseChatMessagesOptions) {
       setMessages(prev => [...prev, errorMsg])
       setLoading(false)
     }
-  }, [loading, selectedSkill, skillEditMode, setSkillEditMode])
+  }, [loading])
 
   const handleRetry = (request: string | ChatRequestEnvelope) => {
     const envelope = typeof request === 'string' ? { text: request } : request
@@ -506,7 +483,6 @@ ${output.trim()}
     executeCommand,
     executeScript,
     executeSpecificCommand,
-    installSkill,
     confirmTaskAction,
     deleteMessage,
     deletedMessage,

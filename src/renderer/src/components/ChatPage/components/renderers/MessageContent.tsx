@@ -6,7 +6,7 @@ import { CommandButtonContent, CommandOptionsContent } from './CommandContent'
 import { ScriptContent } from './ScriptContent'
 import { SearchReplaceContent } from './SearchReplaceContent'
 import { ErrorContent } from './ErrorContent'
-import { SkillInstallContent, BrowserScreenshotContent, InlineCommandButton, AnalyzeOutputButton } from './MiscContent'
+import { BrowserScreenshotContent, InlineCommandButton, AnalyzeOutputButton } from './MiscContent'
 import { RichFormCard } from '../RichFormCard'
 import { ArtifactRenderer } from '../ArtifactRenderer'
 import { ProtocolStreamingBlock } from './ProtocolStreamingBlock'
@@ -88,14 +88,6 @@ export function MessageContent() {
         <>
           <div className="whitespace-pre-wrap">{content}</div>
           <ErrorContent />
-        </>
-      )
-
-    case 'skill_install':
-      return (
-        <>
-          <div className="whitespace-pre-wrap">{content}</div>
-          <SkillInstallContent />
         </>
       )
 

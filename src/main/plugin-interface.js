@@ -14,7 +14,7 @@
  *   author: '作者',              // 可选
  *
  *   // 生命周期钩子（均可选）
- *   onLoad(context) {},          // 插件加载时调用，context 提供 logger / skillsDB / sandbox
+ *   onLoad(context) {},          // 插件加载时调用，context 提供 logger / sandbox
  *   onUnload() {},               // 插件卸载时调用，用于清理资源
  *
  *   // 工具注册（可选）
@@ -33,8 +33,6 @@
  *
  *   // 钩子（可选）
  *   hooks: {
- *     beforeSkillExecute: async (skill, params) => { /* 可修改 params 或返回 false 阻止执行 *\/ },
- *     afterSkillExecute: async (skill, params, result) => { /* 可修改 result *\/ },
  *     beforeContextBuild: async (context) => { /* 可修改 context *\/ },
  *     onUserMessage: async (userInput) => { /* 可返回修改后的输入 *\/ },
  *   },
@@ -115,8 +113,6 @@ function validatePlugin(plugin) {
   // hooks 验证
   if (plugin.hooks) {
     const validHooks = [
-      'beforeSkillExecute',
-      'afterSkillExecute',
       'beforeContextBuild',
       'onUserMessage',
     ]

@@ -1,11 +1,10 @@
 'use strict'
 
-const { Skills, History } = require('./database')
+const { History } = require('./database')
 const { searchBing, formatSearchResults } = require('./web-search')
 const environmentContext = require('./task-engine/environment-context')
 const { judgeNeedSearch } = require('./search-judge')
 const sessionManager = require('./session-manager')
-const { filterSkills } = require('./context-keywords')
 const tokenMonitor = require('./token-monitor')
 const { PROFILE_DIR } = require('./muse/config')
 const { buildTemplateContext } = require('./prompt-templates')
@@ -13,7 +12,7 @@ const path = require('path')
 const fs = require('fs')
 
 // Workspace 配置存储路径
-const WORKSPACE_CONFIG_PATH = path.join(process.env.HOME, '.ai-terminal', 'workspace.json')
+const WORKSPACE_CONFIG_PATH = path.join(process.env.HOME, '.folio', 'workspace.json')
 
 // ========== 历史对话召回 ==========
 // 检测用户是否在回忆之前的对话，提取召回关键词
@@ -289,7 +288,7 @@ function buildSystemPrompt(scriptTemplate) {
 - 文件创建与编辑（代码、文档、网页、PPT 等一切创作物）
 - 任务编排与多步骤自主执行
 - 联网搜索与实时信息获取
-- 技能系统（可扩展的能力插件）
+- 插件系统（可扩展的能力插件）
 
 当主人需要你做事时，你既能对话聊天，也能动手创作。
 
@@ -326,14 +325,11 @@ ${scriptTemplatePriority}
 **多选** → COMMAND_OPTIONS:\\n[{"label":"描述","cmd":"命令"},...]（最多4个）
 **追问** → 🤔 我需要更多信息：...
 **问答** → 详细文字回答
-**安装技能** → INSTALL_SKILL: {"url":"...","skillName":"..."}
-**保存技能** → SAVE_SKILL: {"name":"技能名","description":"一句话描述","content":"完整Markdown技能内容"}
 **富表单** → RICH_FORM: {"title":"表单标题","description":"说明（可选）","submitPrompt":"用户填写了表单（可选，提交后发给AI的前缀）","fields":[{"id":"字段id","label":"字段名","type":"text|textarea|number|select|multi_select|radio|image_upload|date|date_range","required":true,"placeholder":"占位提示","options":[{"label":"选项名","value":"值"}]}]}
   当用户需要填写复杂信息（含图片上传、多选、城市门店联动、日期范围等纯文本对话无法高效完成的场景）时，输出 RICH_FORM 指令，前端会渲染交互表单。用户提交后表单内容会自动整理为文本发回给你继续处理。
 **富产物** → ARTIFACT: {"type":"html|svg|image|code","title":"卡片标题（可选）","content":"源码内容（html/svg/code 用，换行用 \\n 转义、双引号用 \\" 转义）","src":"图片地址（type=image 时用，支持 http/dataURL/本地路径）","language":"代码语言（type=code 时用）","filePath":"落盘文件路径（可选，用于在文件夹中打开）"}
   当你生成的产物适合在对话流中**直接可视化展示**（如一段可交互 HTML、一张矢量图 SVG、一张图片、一段需要高亮的代码）时，输出 ARTIFACT 指令。前端会在气泡内直接渲染：html 走安全 iframe 沙箱、svg 经清洗后内联、image 直接显示、code 带复制按钮，并支持折叠/全屏预览。
   ⚠️ html 内容会在隔离沙箱中渲染，不能访问主应用；适合做卡片、图表、小演示、海报等独立可视产物。content 字段内换行必须 \\n 转义、双引号必须 \\" 转义，确保 JSON 合法。
-  当用户说「安装技能」「创建技能」「保存技能」「帮我做一个技能」时，直接生成完整技能内容并输出 SAVE_SKILL 指令，无需等待确认。
   ⚠️ 重要：content 字段内所有换行必须用 \n 转义，双引号必须用 \" 转义，确保整个 JSON 合法。不要用 prompt 字段，必须用 content 字段。
 **执行任务（脚本/文件操作/命令/自动化）** → MUSE_TASK:\\n{"task":"用自然语言描述完整任务意图"}
   Muse 是后台自主 Agent（ReAct 模式），拥有本地文件系统完整权限（扫描目录、grep 搜索、读写文件、执行 shell 脚本、自动重试），能自主完成单步或多步骤任务流程，无需人工介入。
@@ -352,7 +348,6 @@ ${scriptTemplatePriority}
   10. 任务需要容错重试（如：下载失败换 URL、登录失败重试、网络超时重试）
   11. **用户要求生成 HTML 页面、CSS 动画、JS 交互效果、可视化场景、web artifact、前端界面、动态场景** → 使用 MUSE_TASK，Muse 会直接将 HTML/CSS/JS 内容写入文件，支持后续精确编辑修改。
   **判断口诀**：只要涉及"做/执行/跑/生成/创建/修改/部署"等动作类任务，就用 MUSE_TASK 交给 Muse。纯问答/解释/给命令文本则不需要。
-**修改技能** → SKILL_UPDATE:\\n{"name":"技能名","content":"更新后的完整Markdown内容"}
 **代码变更** → 当用户要求修改某个文件的代码时，使用 SEARCH_REPLACE 格式返回增量变更，而非返回完整文件内容。
   格式：
   SEARCH_REPLACE:
@@ -365,96 +360,11 @@ ${scriptTemplatePriority}
   - 仅在用户明确要求修改代码文件时使用，普通问答不要使用此格式`
 }
 
-// ========== 构建技能上下文片段 ==========
-function buildSkillContext({ skillPrompt, scriptTemplate, skillEditMode, activeSkill }) {
-
-  if (skillEditMode && skillEditMode.content) {
-    const isNewSkill = !skillEditMode.id || skillEditMode.isNew
-    console.log('[Context][buildSkillContext] → 走技能编辑模式分支, isNewSkill:', isNewSkill)
-    if (isNewSkill) {
-      return `\n\n【技能创建模式】
-你是技能设计助手。用户想创建一个新技能，你的任务是快速理解需求、设计并输出完整技能。
-
-## 工作流程
-
-1. **理解需求** — 用户描述后，如果信息足够就直接进入下一步；信息不足时追问关键点：
-   - 这个技能要做什么？（核心行为）
-   - 需要哪些输入？（参数）
-   - 输出什么？（格式/动作）
-
-2. **输出技能草稿** — 用自然语言概括设计方案，包含：技能名称、一句话描述、核心行为、输入输出。
-   询问用户是否需要调整。
-
-3. **生成并保存** — 用户确认后，输出完整技能。格式：
-
-SAVE_SKILL: {"name":"技能名称","description":"一句话描述","content":"完整Markdown技能内容"}
-
-## 技能内容规范
-
-- 必须是完整的 Markdown
-- 推荐结构：一级标题（技能名）→ 简介 → 核心指令/步骤 → 输出格式 → 边界处理
-- 如果是 SOP 类自动执行技能，包含 autoExecute: true 和 steps 步骤定义
-- 语言简洁，指令明确，不要废话
-
-## 规则
-- 技能名称 2-6 个字，简短有力
-- 一次只创建一个技能
-- 信息充足时跳过追问，直接出草稿
-- 保存前必须经用户确认
-- description 不超过 20 字
-
-开始吧。
-`
-    } else {
-      // 加载技能的 Schema 信息
-      let schemaInfo = ''
-      if (skillEditMode.id) {
-        try {
-          const skill = Skills.loadFromDir(skillEditMode.id)
-          if (skill) {
-            const { buildSchemaDigest } = require('./skill-schema')
-            const digest = buildSchemaDigest(skill)
-            if (digest) {
-              schemaInfo = `\n\n当前技能的 Schema 信息：\n${digest}\n`
-            }
-          }
-        } catch (_) { /* ignore */ }
-      }
-
-      return `\n\n【技能编辑模式】
-你正在帮助用户完善和优化名为「${skillEditMode.name}」的技能。
-技能 ID：${skillEditMode.id}
-技能目录：~/.ai-terminal/skills/${skillEditMode.id}/
-${schemaInfo}
-当前技能的完整内容如下：
-\`\`\`markdown
-${skillEditMode.content}
-\`\`\`
-
-你的职责：
-1. 仔细分析当前技能内容的结构和逻辑
-2. 根据用户的需求和建议，提出改进方案
-3. 先用自然语言说明你打算做哪些修改（列出变更点），等用户确认后再输出更新
-4. 当用户确认修改时，使用以下格式返回更新后的完整内容：
-
-SKILL_UPDATE: {"id":"${skillEditMode.id}","name":"${skillEditMode.name}","description":"技能描述（如有变更）","content":"更新后的完整Markdown内容"}
-
-重要规则：
-- 每次修改都必须返回完整的技能内容，不能只返回片段
-- 保持原有格式（YAML frontmatter + Markdown body）
-- SKILL_UPDATE 中必须包含 id 字段，确保精确匹配
-- 如果修改了 description，也要在 SKILL_UPDATE 中包含新的 description
-- 如果用户只是讨论，先解释你的改进想法，等用户确认后再输出 SKILL_UPDATE
-- 如果用户问"当前技能内容是什么"，直接展示上面的内容
-- 建议用户考虑添加 Schema 增强字段（triggers、inputs、sideEffects、onError、rollback）
-
-请等待用户的修改建议。
-`
-    }
-  } else if (scriptTemplate) {
-    console.log('[Context][buildSkillContext] → 走脚本模板分支 (scriptTemplate), lang:', scriptTemplate.lang, ', description:', scriptTemplate.description)
-    console.log('[Context][buildSkillContext] ⚠️ 注意：此分支强制要求 SCRIPT_BLOCK，可能覆盖 SEARCH_REPLACE 指令')
-    return `\n\n【脚本模板技能 — 复用已有脚本】
+// ========== 构建脚本模板上下文片段 ==========
+function buildScriptTemplateContext(scriptTemplate) {
+  if (!scriptTemplate) return ''
+  console.log('[Context][buildScriptTemplateContext] → 脚本模板分支 (scriptTemplate), lang:', scriptTemplate.lang, ', description:', scriptTemplate.description)
+  return `\n\n【脚本模板 — 复用已有脚本】
 以下是用户保存的脚本模板，请根据用户需求处理：
 - 如果用户提供了具体参数（如路径、尺寸、数量等），请修改对应参数后返回
 - 如果用户只是要求"执行"或没有具体参数修改需求，请直接原样返回完整脚本
@@ -471,199 +381,6 @@ ${scriptTemplate.content}
 SCRIPT_BLOCK:
 {"lang":"${scriptTemplate.lang}","description":"脚本用途描述","content":"完整脚本内容"}
 `
-  } else if (skillPrompt) {
-    const isFullDoc = skillPrompt.includes('# ') && skillPrompt.includes('##')
-    console.log('[Context][buildSkillContext] → 走 skillPrompt 分支, isFullDoc:', isFullDoc, ', promptLength:', skillPrompt.length)
-
-    // 构建 Schema 摘要（如果技能有 Schema 字段）
-    let schemaSection = ''
-    if (activeSkill) {
-      const { buildSchemaDigest } = require('./skill-schema')
-      const digest = buildSchemaDigest(activeSkill)
-      if (digest) {
-        schemaSection = `\n\n【技能 Schema 信息】\n${digest}\n\n请根据 Schema 信息：\n- 如果用户输入缺少必要参数（inputs 中未提供默认值的参数），主动追问\n- 注意副作用声明（sideEffects），在执行前告知用户\n- 如果标记为 dangerous，执行前必须确认\n- 出错时参考 onError 策略（retry/abort/fallback/ask）\n- 如果有 rollback 命令，在执行危险操作前告知用户可以回滚\n`
-      }
-    }
-
-    // 构建 Pipeline 阶段指导（如果技能定义了 pipeline）
-    let pipelineSection = ''
-    if (activeSkill && activeSkill.pipeline) {
-      try {
-        const { buildPipelinePrompt } = require('./skill-pipeline')
-        pipelineSection = buildPipelinePrompt(activeSkill.pipeline)
-        if (pipelineSection) {
-          console.log('[Context][buildSkillContext] 注入 Pipeline 阶段指导, stages:', activeSkill.pipeline.stages.length)
-        }
-      } catch (pipelineErr) {
-        console.warn('[Context][buildSkillContext] Pipeline 指导构建失败:', pipelineErr.message)
-      }
-    }
-
-    // 构建关联场景模板上下文（contextTemplates 字段）
-    let contextTemplatesSection = ''
-    if (activeSkill && activeSkill.contextTemplates && activeSkill.contextTemplates.length > 0) {
-      try {
-        const { loadTemplates } = require('./prompt-templates')
-        const allTemplates = loadTemplates()
-        const matchedSections = []
-        for (const templateName of activeSkill.contextTemplates) {
-          const template = allTemplates.find(t => t.name === templateName)
-          if (template) {
-            matchedSections.push(`### ${template.name}\n> ${template.description}\n\n${template.content}`)
-            console.log('[Context][buildSkillContext] 注入关联模板:', templateName)
-          } else {
-            console.warn('[Context][buildSkillContext] 关联模板未找到:', templateName)
-          }
-        }
-        if (matchedSections.length > 0) {
-          contextTemplatesSection = `\n\n## 技能关联的场景规范\n本技能声明了以下场景规范，生成内容时请遵循：\n\n${matchedSections.join('\n\n---\n\n')}\n`
-        }
-      } catch (ctErr) {
-        console.warn('[Context][buildSkillContext] 关联模板加载失败:', ctErr.message)
-      }
-    }
-
-    // 构建依赖技能上下文（depends 字段声明的前置技能）
-    let dependsSection = ''
-    if (activeSkill && activeSkill.depends && activeSkill.depends.length > 0) {
-      const depContents = []
-      for (const depId of activeSkill.depends) {
-        try {
-          const depSkill = Skills.loadFromDir(depId)
-          if (depSkill && depSkill.content) {
-            depContents.push(`### 依赖技能：${depSkill.name}（ID: ${depId}）\n\n${depSkill.content}`)
-            console.log('[Context][buildSkillContext] 注入依赖技能:', depId, depSkill.name)
-          } else {
-            depContents.push(`### 依赖技能：${depId}（未安装）\n\n> ⚠️ 该依赖技能未安装，请提示用户先安装。`)
-            console.warn('[Context][buildSkillContext] 依赖技能未找到:', depId)
-          }
-        } catch (e) {
-          console.warn('[Context][buildSkillContext] 加载依赖技能失败:', depId, e.message)
-        }
-      }
-      if (depContents.length > 0) {
-        dependsSection = `\n\n【前置依赖技能文档】\n当前技能依赖以下技能，在需要时请参照其文档执行对应流程：\n\n${depContents.join('\n\n---\n\n')}\n`
-      }
-    }
-
-    // HTML 预览能力提示（技能文档中提到 HTML 预览/生成时注入）
-    let htmlPreviewHint = ''
-    if (skillPrompt.includes('HTML') || skillPrompt.includes('html') || skillPrompt.includes('预览')) {
-      htmlPreviewHint = `\n\n【HTML 预览能力】\n当你需要生成 HTML 预览文件并呈现给用户时，直接使用 MUSE_TASK 完成“生成 HTML”的完整流程（Muse 会将 HTML 写入文件）。\n注意：技能文档中提到的 "present_files" 等能力，统一使用 ARTIFACT 指令在对话流中直接呈现。\n`
-    }
-
-    if (isFullDoc) {
-      return `\n\n【当前激活技能 — 完整技能文档】
-以下是用户选择的技能完整文档，请仔细阅读并按照技能文档中的指令和规则来回答用户的问题。
-
-${skillPrompt}
-${schemaSection}${pipelineSection}${contextTemplatesSection}${dependsSection}${htmlPreviewHint}
-请严格遵循上述技能文档中的指令和规则来回答用户的问题。
-`
-    } else {
-      return `\n\n【当前激活技能】\n以下是用户选择的技能指令，请优先以此身份和能力来回答：\n${skillPrompt}\n${schemaSection}${pipelineSection}${contextTemplatesSection}${dependsSection}${htmlPreviewHint}`
-    }
-  }
-  return ''
-}
-
-/**
- * 读取技能关联的脚本文件内容，用于注入 AI 上下文。
- * 在用户激活技能后调用，一次性注入所有必要的上下文：
- * - 脚本内容和运行命令
- * - SKILL_FILE_PATH 环境变量
- * - references/ 目录下的参考文档
- */
-function loadSkillScriptContext(activeSkill) {
-  const fs = require('fs')
-  const path = require('path')
-
-  if (!activeSkill) return ''
-
-  let contextParts = []
-
-  // ===== 1. references 参考文档注入 =====
-  if (activeSkill.references && activeSkill.references.length > 0) {
-    const refContents = []
-    for (const ref of activeSkill.references) {
-      if (fs.existsSync(ref.path)) {
-        try {
-          const refContent = fs.readFileSync(ref.path, 'utf-8')
-          refContents.push(`### ${ref.name}\n${refContent}`)
-        } catch (e) {
-          console.warn(`[Context][loadSkillScriptContext] 读取参考文档失败: ${ref.path}`, e.message)
-        }
-      }
-    }
-    if (refContents.length > 0) {
-      contextParts.push(`\n\n【技能参考文档】\n以下是该技能的参考文档，请根据需要使用：\n\n${refContents.join('\n\n---\n\n')}`)
-      console.log(`[Context][loadSkillScriptContext] 已注入 ${refContents.length} 个参考文档`)
-    }
-  }
-
-  // ===== 2. 脚本文件和运行命令 =====
-  if (!activeSkill.scriptFile || !fs.existsSync(activeSkill.scriptFile)) {
-    console.log('[Context][loadSkillScriptContext] 无关联脚本:', {
-      hasActiveSkill: true,
-      scriptFile: activeSkill?.scriptFile || null,
-      exists: activeSkill?.scriptFile ? fs.existsSync(activeSkill.scriptFile) : false
-    })
-    return contextParts.join('')
-  }
-
-  const scriptFilePath = activeSkill.scriptFile
-  const skillDir = activeSkill.skillDir || path.dirname(scriptFilePath)
-  console.log('[Context][loadSkillScriptContext] 找到关联脚本:', scriptFilePath)
-  const ext = path.extname(scriptFilePath).slice(1)
-  const langMap = { py: 'python', js: 'node', sh: 'bash', rb: 'ruby' }
-  const runnerMap = { py: 'python3', js: 'node', sh: 'bash', rb: 'ruby' }
-  const lang = langMap[ext] || 'bash'
-  const runner = runnerMap[ext] || 'bash'
-  const scriptContent = fs.readFileSync(scriptFilePath, 'utf-8')
-
-  // 判断脚本是否在 scripts/ 子目录下（需要 cd 到技能目录执行，确保模块导入正常）
-  const isInSubDir = scriptFilePath.includes(path.join(skillDir, 'scripts'))
-
-  // 生成运行命令：全部使用绝对路径，SKILL_FILE_PATH 直接内联
-  // 如果脚本在子目录中，需要先 cd 到技能目录（确保 Python 相对导入正常）
-  const skillFilePath = path.join(skillDir, 'SKILL.md')
-  const envPrefix = `SKILL_FILE_PATH="${skillFilePath}"`
-  const runCommand = isInSubDir
-    ? `cd "${skillDir}" && ${envPrefix} ${runner} "${scriptFilePath}"`
-    : `${envPrefix} ${runner} "${scriptFilePath}"`
-
-  const runCommandWithArgs = isInSubDir
-    ? `cd "${skillDir}" && ${envPrefix} ${runner} "${scriptFilePath}" <参数>`
-    : `${envPrefix} ${runner} "${scriptFilePath}" <参数>`
-
-  contextParts.push(`\n\n【技能已有关联脚本】
-该技能已有一个保存好的脚本文件，路径：${scriptFilePath}
-技能根目录：${skillDir}
-
-脚本语言：${lang}
-运行命令（已包含环境变量和目录切换，直接使用即可）：
-${runCommand}
-追加参数示例：${runCommandWithArgs}
-
-⚠️ 重要：运行命令中已内置 SKILL_FILE_PATH 环境变量和 cd 到技能目录，请直接使用上述命令格式，不要使用 $(dirname "$SKILL_FILE_PATH") 等间接方式。
-
-【重要判断规则 — 优先使用增量修改】
-- 优先复用已有脚本，不要重新生成完整脚本。
-- 当用户提供了具体参数（如名字、年龄、路径、尺寸等），需要修改脚本中的对应值时，必须使用 SEARCH_REPLACE 格式只修改需要变更的部分，然后附上运行命令。格式如下：
-
-SEARCH_REPLACE:
-{"file":"${scriptFilePath}","changes":[{"search":"脚本中需要修改的原始代码片段","replace":"替换后的新代码片段"}]}
-
-修改完成后，在 SEARCH_REPLACE 块之后，另起一行返回运行命令：
-${runCommand}
-
-- 如果用户的需求无需修改脚本内容（如直接运行或带命令行参数运行），直接返回运行命令即可：
-${runCommandWithArgs}
-
-- 只有当已有脚本完全无法满足需求、需要从头重写时，才使用 SCRIPT_BLOCK 格式返回全新脚本。
-`)
-
-  return contextParts.join('')
 }
 
 /**
@@ -674,7 +391,7 @@ async function buildBrowserContext() {
 }
 
 // ========== 构建聊天上下文（分层注入 + 动态裁剪） ==========
-async function buildChatContext({ userInput, skillPrompt, scriptTemplate, activeSkillId, skillEditMode, sessionId, images }) {
+async function buildChatContext({ userInput, scriptTemplate, sessionId, images }) {
   const perfStart = Date.now()
   const perf = (label) => console.log(`[Context][Perf] ${label}: ${Date.now() - perfStart}ms`)
 
@@ -733,22 +450,6 @@ async function buildChatContext({ userInput, skillPrompt, scriptTemplate, active
       if (win) {
         win.webContents.send('ai:searchStatus', { searching: false, failed: true, keywords: searchJudge.keywords })
       }
-    }
-  }
-
-  // ========== 用户提到的技能 ==========
-  let mentionedSkillContext = ''
-  let allSkills = []
-  try {
-    allSkills = Skills.getAll()
-  } catch (e) {
-    console.error('[Skills] 加载技能清单失败:', e)
-  }
-
-  if (allSkills && allSkills.length > 0) {
-    const mentionedSkill = allSkills.find(s => s.name && userInput.includes(s.name))
-    if (mentionedSkill && mentionedSkill.content) {
-      mentionedSkillContext = `\n\n【用户提到的技能详情 — "${mentionedSkill.name}"】\n${mentionedSkill.content}\n`
     }
   }
 
@@ -851,44 +552,8 @@ async function buildChatContext({ userInput, skillPrompt, scriptTemplate, active
       console.warn('[Context] 加载 Muse 记忆系统失败:', e.message)
     }
 
-    // 技能清单（> 15 条时裁剪到 Top-10 相关）
-    let skillListContext = ''
-    if (allSkills && allSkills.length > 0) {
-      let displaySkills = allSkills
-      if (allSkills.length > 15) {
-        displaySkills = filterSkills(allSkills, userInput, 10)
-        const skillSummary = displaySkills.map(s => `- ${s.name}：${s.description || '无描述'}`).join('\n')
-        skillListContext = `\n\n【系统已安装技能（Top-10 相关，共 ${allSkills.length} 个）】\n${skillSummary}\n用户可以要求查看、修改、创建或删除技能。\n`
-      } else {
-        const skillSummary = displaySkills.map(s => `- ${s.name}：${s.description || '无描述'}`).join('\n')
-        skillListContext = `\n\n【系统已安装技能】\n${skillSummary}\n共 ${allSkills.length} 个技能。用户可能会要求查看、修改、创建或删除技能。如用户提及某个技能名称，你可以参考下方的技能详情进行操作。\n`
-      }
-    }
-
-    // 处理激活技能：将 activeSkillId 转换为 skillPrompt
-    let finalSkillPrompt = skillPrompt
-    let activeSkillForScript = null
-    if (activeSkillId && !skillPrompt && !scriptTemplate && !skillEditMode) {
-      const activeSkill = allSkills.find(s => s.id === activeSkillId)
-      if (activeSkill && activeSkill.content) {
-        finalSkillPrompt = activeSkill.content
-        activeSkillForScript = Skills.loadFromDir(activeSkillId)
-        console.log('[Context][buildChatContext] 激活技能已加载:', {
-          name: activeSkill.name,
-          id: activeSkillId,
-          hasScriptFile: !!activeSkillForScript?.scriptFile,
-          scriptFile: activeSkillForScript?.scriptFile || null,
-          promptLength: finalSkillPrompt.length
-        })
-      } else {
-        console.log('[Context][buildChatContext] 激活技能未找到或无内容:', { activeSkillId, found: !!activeSkill, hasContent: !!activeSkill?.content })
-      }
-    }
-
-    // 激活技能上下文（含已有脚本信息 + Schema 摘要，让 AI 自行判断复用还是重新生成）
-    const skillContext = buildSkillContext({ skillPrompt: finalSkillPrompt, scriptTemplate, skillEditMode, activeSkill: activeSkillForScript }) +
-      loadSkillScriptContext(activeSkillForScript)
-    console.log('[Context][buildChatContext] 技能上下文构建完成, skillContextLength:', skillContext.length, ', hasScriptContext:', skillContext.includes('技能已有关联脚本'))
+    // 脚本模板上下文（用户选择了已保存的脚本模板时注入）
+    const scriptTemplateContext = buildScriptTemplateContext(scriptTemplate)
 
     // 浏览器上下文（内置 BrowserView 有活跃页面时注入）
     const browserContext = await buildBrowserContext()
@@ -933,7 +598,7 @@ async function buildChatContext({ userInput, skillPrompt, scriptTemplate, active
     try {
       const pluginSystem = require('./plugin-system')
       pluginContext = await pluginSystem.collectContextProviders(userInput, {
-        activeSkillId, sessionId, workspaceInfo,
+        sessionId, workspaceInfo,
       })
       if (pluginContext) {
         console.log('[Context] 插件上下文注入长度:', pluginContext.length)
@@ -943,8 +608,8 @@ async function buildChatContext({ userInput, skillPrompt, scriptTemplate, active
     }
     perf('pluginContextProviders')
 
-    const fullQuestion = `${systemPrompt}${envContext}${workspaceContext}${memoryContext}${skillListContext}${mentionedSkillContext}${skillContext}${templateContext}${pluginContext}${browserContext}${searchContext}${scriptExecContext}${historyRecallContext}\n\n用户当前输入：${userInput}`
-    const cacheType = (searchContext || skillContext) ? 'knowledge' : 'command'
+    const fullQuestion = `${systemPrompt}${envContext}${workspaceContext}${memoryContext}${scriptTemplateContext}${templateContext}${pluginContext}${browserContext}${searchContext}${scriptExecContext}${historyRecallContext}\n\n用户当前输入：${userInput}`
+    const cacheType = (searchContext || scriptTemplateContext) ? 'knowledge' : 'command'
 
     // 统计各部分上下文长度，推送到前端
     tokenMonitor.recordBaseContext({
@@ -952,9 +617,7 @@ async function buildChatContext({ userInput, skillPrompt, scriptTemplate, active
       envContext: envContext.length,
       workspaceContext: workspaceContext.length,
       memoryContext: memoryContext.length,
-      skillListContext: skillListContext.length,
-      skillContext: skillContext.length,
-      mentionedSkillContext: mentionedSkillContext.length,
+      scriptTemplateContext: scriptTemplateContext.length,
       templateContext: templateContext.length,
       browserContext: browserContext.length,
       searchContext: searchContext.length,
@@ -968,15 +631,11 @@ async function buildChatContext({ userInput, skillPrompt, scriptTemplate, active
     state.requestCount = 1
     state.injectedSystemPrompt = true
     state.injectedMemories = true
-    state.injectedSkillList = true
-    state.lastActiveSkillId = activeSkillId || null
-    state.lastSkillEditMode = skillEditMode ? `${skillEditMode.id || 'new'}_${!!skillEditMode.isNew}` : null
-    state.lastSkillListHash = allSkills ? sessionManager.simpleHash(allSkills.map(s => s.id).join(',')) : ''
     state.lastWorkspaceHash = workspaceInfo.workspaceHash
 
     perf('buildChatContext(full) 总耗时')
     console.log(`[Context] 完整注入 (Full)，约 ${fullQuestion.length} 字`)
-    return { fullQuestion, webSearched, cacheType, searchContext, skillContext, contextMode: 'full', contextSize: fullQuestion.length, images, matchedTemplateNames }
+    return { fullQuestion, webSearched, cacheType, searchContext, contextMode: 'full', contextSize: fullQuestion.length, images, matchedTemplateNames }
   }
 
   // ========== 后续请求：仅注入变化部分 + 动态内容 ==========
@@ -984,16 +643,6 @@ async function buildChatContext({ userInput, skillPrompt, scriptTemplate, active
   const state = sessionManager.getContextState()
 
   // Muse 画像由 Muse 心跳维护，后续请求不再增量注入记忆变化
-
-  // 检测技能清单变化
-  const currentSkillListHash = allSkills ? sessionManager.simpleHash(allSkills.map(s => s.id).join(',')) : ''
-  if (currentSkillListHash !== state.lastSkillListHash && allSkills && allSkills.length > 0) {
-    const skillSummary = allSkills.map(s => `- ${s.name}：${s.description || '无描述'}`).join('\n')
-    deltaFragments.push(`【技能清单已更新】\n${skillSummary}\n共 ${allSkills.length} 个技能。`)
-    state.lastSkillListHash = currentSkillListHash
-    state.injectedSkillList = true
-    console.log('[Context] 检测到技能清单变化，增量注入')
-  }
 
   // 检测工作区变化
   const currentWorkspaceInfo = getWorkspaceContext()
@@ -1006,42 +655,6 @@ async function buildChatContext({ userInput, skillPrompt, scriptTemplate, active
       console.log('[Context] 工作区已取消，注入变更通知')
     }
     state.lastWorkspaceHash = currentWorkspaceInfo.workspaceHash
-  }
-
-  // 检测激活技能变化
-  const currentSkillEditKey = skillEditMode ? `${skillEditMode.id || 'new'}_${!!skillEditMode.isNew}` : null
-  const skillChanged = activeSkillId !== state.lastActiveSkillId
-  const skillEditChanged = currentSkillEditKey !== state.lastSkillEditMode
-
-  // 技能/编辑模式变化时注入，或者当编辑模式持续存在时也注入（Agent Loop 场景）
-  // 原因：脚本执行后的自动重试/继续对话中，编辑模式上下文不能丢失
-  const shouldInjectSkillContext = skillChanged || skillEditChanged || (skillEditMode && skillEditMode.content)
-  
-  if (shouldInjectSkillContext) {
-    // 处理激活技能：将 activeSkillId 转换为 skillPrompt
-    let finalSkillPrompt = skillPrompt
-    let activeSkillForScriptDelta = null
-    if (activeSkillId && !skillPrompt && !scriptTemplate && !skillEditMode) {
-      const activeSkill = allSkills.find(s => s.id === activeSkillId)
-      if (activeSkill && activeSkill.content) {
-        finalSkillPrompt = activeSkill.content
-        activeSkillForScriptDelta = Skills.loadFromDir(activeSkillId)
-        console.log('[Context] 激活技能已加载（增量）:', activeSkill.name)
-      }
-    }
-
-    const skillContext = buildSkillContext({ skillPrompt: finalSkillPrompt, scriptTemplate, skillEditMode, activeSkill: activeSkillForScriptDelta }) +
-      loadSkillScriptContext(activeSkillForScriptDelta)
-    if (skillContext) {
-      deltaFragments.push(skillContext)
-      const injectReason = skillChanged ? '技能变化' : skillEditChanged ? '编辑模式变化' : 'Agent Loop 保持编辑模式'
-      console.log('[Context] 检测到技能/编辑模式变化，增量注入，原因:', injectReason)
-    } else if (state.lastActiveSkillId && !activeSkillId) {
-      deltaFragments.push('\n\n【上下文变更】用户已取消激活技能，恢复到通用模式。')
-      console.log('[Context] 技能已取消，注入变更通知')
-    }
-    state.lastActiveSkillId = activeSkillId || null
-    state.lastSkillEditMode = currentSkillEditKey
   }
 
   // 浏览器上下文（后续请求也需要注入最新页面状态）
@@ -1063,16 +676,22 @@ async function buildChatContext({ userInput, skillPrompt, scriptTemplate, active
   try {
     const pluginSystem = require('./plugin-system')
     pluginContext = await pluginSystem.collectContextProviders(userInput, {
-      activeSkillId, sessionId,
+      sessionId,
     })
   } catch (_) { /* 插件系统未加载时忽略 */ }
+
+  // 脚本模板上下文（用户选择了脚本模板时保证后续请求也可见）
+  const scriptTemplateContext = buildScriptTemplateContext(scriptTemplate)
+  if (scriptTemplateContext) {
+    deltaFragments.push(scriptTemplateContext)
+  }
 
   // 拼装轻量 prompt
   let lightQuestion = ''
   if (deltaFragments.length > 0) {
-    lightQuestion = `【上下文增量更新】\n${deltaFragments.join('\n')}${mentionedSkillContext}${browserContext}${searchContext}${pluginContext}${historyRecallContext}\n\n用户当前输入：${userInput}`
+    lightQuestion = `【上下文增量更新】\n${deltaFragments.join('\n')}${browserContext}${searchContext}${pluginContext}${historyRecallContext}\n\n用户当前输入：${userInput}`
   } else {
-    lightQuestion = `${mentionedSkillContext}${browserContext}${searchContext}${historyRecallContext}${mentionedSkillContext || browserContext || searchContext || historyRecallContext ? '\n\n' : ''}用户当前输入：${userInput}`
+    lightQuestion = `${browserContext}${searchContext}${historyRecallContext}${browserContext || searchContext || historyRecallContext ? '\n\n' : ''}用户当前输入：${userInput}`
   }
 
   state.requestCount++
@@ -1083,14 +702,13 @@ async function buildChatContext({ userInput, skillPrompt, scriptTemplate, active
   tokenMonitor.recordIncrementalContext(lightQuestion.length, {
     userInput: userInput.length,
     searchContext: searchContext.length,
-    mentionedSkillContext: mentionedSkillContext.length,
     browserContext: browserContext.length,
     deltaFragments: deltaFragments.join('').length,
   })
 
   perf('buildChatContext(light) 总耗时')
   console.log(`[Context] 轻量注入 (Light #${state.requestCount})，约 ${lightQuestion.length} 字，增量片段 ${deltaFragments.length} 个`)
-  return { fullQuestion: lightQuestion, webSearched, cacheType, searchContext, skillContext: '', contextMode: 'light', contextSize: lightQuestion.length, images }
+  return { fullQuestion: lightQuestion, webSearched, cacheType, searchContext, contextMode: 'light', contextSize: lightQuestion.length, images }
 }
 
-module.exports = { init, buildSystemPrompt, buildSkillContext, buildChatContext, addScriptExecResult }
+module.exports = { init, buildSystemPrompt, buildChatContext, addScriptExecResult }

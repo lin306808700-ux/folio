@@ -119,20 +119,6 @@ module.exports = {
     }
   }
 
-  // Patch skill-schema
-  const skillSchemaPath = path.resolve(__dirname, '../../../skill-schema.js')
-  require.cache[skillSchemaPath] = {
-    id: skillSchemaPath, filename: skillSchemaPath, loaded: true,
-    exports: { findBestTriggerMatch: () => null, parseFrontmatter: () => ({}), validateSchema: () => true, recordSkillUsage: () => {} }
-  }
-
-  // Patch skill-creator
-  const skillCreatorPath = path.resolve(__dirname, '../../skill-creator.js')
-  require.cache[skillCreatorPath] = {
-    id: skillCreatorPath, filename: skillCreatorPath, loaded: true,
-    exports: { recordSkillUsage: () => {} }
-  }
-
   // Patch database — 包含完整的 Letters.create 等方法
   const databasePath = path.resolve(__dirname, '../../../database.js')
   let _letterStore = []
@@ -157,8 +143,7 @@ module.exports = {
           const l = _letterStore.find(x => x.id === id)
           if (l) l.read = true
         }
-      },
-      Skills: { getAll: () => [], getInstalled: () => [] }
+      }
     }
   }
 }

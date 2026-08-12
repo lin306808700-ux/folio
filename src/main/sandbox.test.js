@@ -8,7 +8,7 @@ const path = require('node:path')
 const { Sandbox, isDangerous } = require('./sandbox')
 
 async function createFixture(t) {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ai-terminal-sandbox-'))
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'folio-sandbox-'))
   const workspace = path.join(root, 'workspace')
   const outside = path.join(root, 'outside')
   await fs.mkdir(workspace)

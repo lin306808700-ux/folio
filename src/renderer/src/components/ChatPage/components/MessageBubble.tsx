@@ -19,10 +19,8 @@ interface MessageBubbleProps {
   onExecuteCommand: () => void
   onExecuteScript: (runCommand: string) => void
   onExecuteSpecificCommand: (cmd: string, label: string) => void
-  onInstallSkill: (skillData: { url: string; skillName?: string }) => void
   onConfirmTask: (taskId: string, confirmed: boolean, modifiedStep?: any) => void
   onRetry: (request: string | ChatRequestEnvelope) => void
-  onSkillsSaved: () => void
   onAnalyzeOutput?: () => void
   onQuote?: (msg: Message) => void
   onQuoteSelection?: (msg: Message, text: string) => void
@@ -61,10 +59,8 @@ export const MessageBubble = React.memo(function MessageBubble(props: MessageBub
     onExecuteCommand: props.onExecuteCommand,
     onExecuteScript: props.onExecuteScript,
     onExecuteSpecificCommand: props.onExecuteSpecificCommand,
-    onInstallSkill: props.onInstallSkill,
     onConfirmTask: props.onConfirmTask,
     onRetry: props.onRetry,
-    onSkillsSaved: props.onSkillsSaved,
     onAnalyzeOutput: props.onAnalyzeOutput,
     onQuote: props.onQuote,
     onEditStep: props.onEditStep,

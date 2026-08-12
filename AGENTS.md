@@ -1,4 +1,4 @@
-# AI Terminal Agent Guide
+# Folio Agent Guide
 
 Read this file before exploring the repository. Use `docs/codebase-map.md` as the
 canonical project map and only inspect the modules relevant to the current task.
@@ -28,7 +28,7 @@ canonical project map and only inspect the modules relevant to the current task.
 
 ## Current Product Conventions
 
-- Navigation labels are: 对话, 学习图谱, 变更分析, 缪斯, 作品, 技能, 历史.
+- Navigation labels are: 对话, 学习图谱, 变更分析, 缪斯, 作品, 历史.
 - Business pages use `components/PageShell.tsx`; do not add page-specific full
   screen gradients, star fields, or competing page shells.
 - The 缪斯 page intentionally contains only 来信 and 目标. Tasks belong to the

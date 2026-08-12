@@ -909,7 +909,6 @@ ${replyContent}
 ${modificationRequest}
 
 【环境信息】
-${context.skills || '无可用技能'}
 ${context.systemTools || '无系统工具信息'}
 
 请根据主人的反馈，重新规划执行方案，以 JSON 格式返回：
@@ -920,7 +919,7 @@ ${context.systemTools || '无系统工具信息'}
 }
 
 注意：
-- 优先使用已有的技能（skills）和成熟的库来实现
+- 优先使用成熟的库和工具来实现
 - 方案要具体，说明用什么工具/库/技术
 - 返回纯 JSON`
 

@@ -94,62 +94,6 @@ class TaskExecutor {
   async execute(plan, callbacks = {}) {
     const taskId = plan.id;
 
-    // ── 技能环境预检（requires + pythonPackages）──
-    if (plan.skill && (plan.skill.requires?.length > 0 || plan.skill.pythonPackages?.length > 0)) {
-      const envChecker = toolRegistry.get('env-checker');
-      if (envChecker) {
-        const precheckResult = await envChecker.precheck({
-          requires: plan.skill.requires || [],
-          pythonPackages: plan.skill.pythonPackages || []
-        });
-
-        if (!precheckResult.ready && precheckResult.issues?.length > 0) {
-          const issueLines = precheckResult.issues.map(issue => {
-            if (issue.type === 'missing_tool') {
-              const installHints = {
-                python: 'brew install python3',
-                ffmpeg: 'brew install ffmpeg',
-                conda: 'brew install --cask miniconda',
-                git: 'brew install git',
-                docker: 'brew install --cask docker',
-                imagemagick: 'brew install imagemagick'
-              };
-              const hint = installHints[issue.tool] ? `（安装: ${installHints[issue.tool]}）` : '';
-              return `- 缺少工具 **${issue.tool}** ${hint}`;
-            }
-            if (issue.type === 'missing_python_package') {
-              return `- 缺少 Python 包 **${issue.package}**（安装: pip install ${issue.package}）`;
-            }
-            return `- ${issue.message}`;
-          });
-
-          const errorMessage = [
-            `⚠️ 技能 **${plan.skill.name || taskId}** 运行环境未就绪：`,
-            ...issueLines,
-            '',
-            '请安装缺少的依赖后重试。'
-          ].join('\n');
-
-          if (callbacks.onError) {
-            callbacks.onError(new Error(errorMessage), -1);
-          }
-          if (callbacks.onComplete) {
-            callbacks.onComplete(errorMessage, {});
-          }
-
-          return {
-            status: 'failed',
-            taskId,
-            error: errorMessage,
-            precheckFailed: true,
-            issues: precheckResult.issues
-          };
-        }
-
-        console.log(`[Executor] 技能 ${plan.skill.name || taskId} 环境预检通过`);
-      }
-    }
-
     const taskState = {
       id: taskId,
       plan: plan,

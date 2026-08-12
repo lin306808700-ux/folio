@@ -6,7 +6,7 @@
  * 记录从用户输入 → 意图分类 → ReAct 每步推理/工具调用/观察 → 最终结果
  * 每次 ReAct 执行生成一个独立 JSON 日志文件，便于事后分析和系统优化
  * 
- * 日志目录: ~/.ai-terminal/muse/react-logs/
+ * 日志目录: ~/.folio/muse/react-logs/
  * 文件命名: {date}_{sessionId}.json
  */
 
@@ -28,7 +28,7 @@ class ReactLogSession {
     this.sessionId = sessionId || `react_${Date.now()}`
     this.startedAt = new Date().toISOString()
     this.userInput = userInput || ''
-    this.source = source || 'unknown' // 'router_tool' | 'muse_task' | 'skill'
+    this.source = source || 'unknown' // 'router_tool' | 'muse_task' | 'router_followup'
     this.intentClassification = intentClassification || null
     this.context = {}
     this.promptSnapshots = []
@@ -46,9 +46,6 @@ class ReactLogSession {
       hasMemories: !!(context.memories && context.memories.length > 0),
       memoriesLength: (context.memories || '').length,
       hasProfile: !!(context.profile && context.profile.length > 0),
-      hasSkills: !!(context.skills && context.skills.length > 0),
-      hasActiveSkillDoc: !!(context.activeSkillDoc && context.activeSkillDoc.length > 0),
-      activeSkillDocLength: (context.activeSkillDoc || '').length,
       hasPreviousTask: !!context.previousTask,
     }
   }

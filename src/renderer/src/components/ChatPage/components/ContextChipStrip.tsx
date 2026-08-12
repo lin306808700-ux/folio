@@ -1,10 +1,10 @@
 import React from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Zap, Palette, Shield, FileText, X } from 'lucide-react'
+import { Palette, Shield, FileText, X } from 'lucide-react'
 
 export interface ContextChip {
   id: string
-  type: 'skill' | 'template' | 'craft' | 'pipeline'
+  type: 'template' | 'craft' | 'pipeline'
   label: string
   detail?: string
   removable?: boolean
@@ -17,12 +17,6 @@ interface ContextChipStripProps {
 }
 
 const chipConfig: Record<ContextChip['type'], { icon: React.ReactNode; bgClass: string; textClass: string; borderClass: string }> = {
-  skill: {
-    icon: <Zap size={11} />,
-    bgClass: 'bg-indigo-500/15',
-    textClass: 'text-indigo-300',
-    borderClass: 'border-indigo-500/30',
-  },
   template: {
     icon: <Palette size={11} />,
     bgClass: 'bg-violet-500/15',

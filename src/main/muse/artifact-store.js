@@ -8,7 +8,7 @@
 const fs = require('fs')
 const path = require('path')
 
-const MUSE_HOME = path.join(process.env.HOME, '.ai-terminal/muse')
+const MUSE_HOME = path.join(process.env.HOME, '.folio/muse')
 const ARTIFACTS_FILE = path.join(MUSE_HOME, 'artifacts.json')
 
 let _artifacts = []

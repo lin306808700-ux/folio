@@ -87,8 +87,7 @@ export function useTriggerSearch(isElectron: boolean) {
   // 缓存数据
   const workspaceFilesRef = useRef<TriggerItem[]>([])
   const artifactsRef = useRef<TriggerItem[]>([])
-  const skillsRef = useRef<TriggerItem[]>([])
-  const loadedRef = useRef({ workspace: false, artifacts: false, skills: false })
+  const loadedRef = useRef({ workspace: false, artifacts: false })
 
   // ========== 加载工作区文件（@ 触发）— 每次实时读取终端当前 cwd，不缓存 ==========
   const loadWorkspaceFiles = useCallback(async () => {
@@ -156,27 +155,6 @@ export function useTriggerSearch(isElectron: boolean) {
     }
   }, [isElectron])
 
-  // ========== 加载技能（/ 触发） ==========
-  const loadSkills = useCallback(async () => {
-    if (!isElectron) return
-    try {
-      const api = (window as any).electronAPI
-      const fileSkills = await api?.db?.skills?.getAll()
-      const skills: TriggerItem[] = (fileSkills || []).map((s: any) => ({
-        id: `skill_${s.id}`,
-        label: s.name,
-        sublabel: s.description || 'Muse 技能',
-        icon: 'Zap',
-        insertText: s.name,
-        data: s,
-      }))
-      skillsRef.current = skills
-      loadedRef.current.skills = true
-    } catch (e) {
-      console.error('[TriggerSearch] 加载技能失败:', e)
-    }
-  }, [isElectron])
-
   // ========== 加载模板列表（@ 触发时混入） ==========
   const templatesRef = useRef<TriggerItem[]>([])
   const loadTemplates = useCallback(async () => {
@@ -205,47 +183,35 @@ export function useTriggerSearch(isElectron: boolean) {
     // 系统命令
     { id: 'cmd_selfcheck', label: '/self-check', sublabel: '运行系统自检（全部场景）', icon: 'Shield', insertText: '/self-check', group: '系统' },
     { id: 'cmd_selfcheck_task', label: '/self-check 任务编排执行', sublabel: '自检：任务编排执行分组', icon: 'Shield', insertText: '/self-check 任务编排执行', group: '系统' },
-    { id: 'cmd_selfcheck_crud', label: '/self-check 技能CRUD', sublabel: '自检：技能CRUD分组', icon: 'Shield', insertText: '/self-check 技能CRUD', group: '系统' },
-    { id: 'cmd_selfcheck_exec', label: '/self-check 技能执行', sublabel: '自检：技能执行分组', icon: 'Shield', insertText: '/self-check 技能执行', group: '系统' },
     { id: 'cmd_selfcheck_mem', label: '/self-check 记忆与系统集成', sublabel: '自检：记忆与系统集成分组', icon: 'Shield', insertText: '/self-check 记忆与系统集成', group: '系统' },
     { id: 'cmd_clear', label: '/clear', sublabel: '清空当前对话', icon: 'Trash2', insertText: '/clear', group: '会话' },
     { id: 'cmd_reset', label: '/reset', sublabel: '重置会话（新 sessionId）', icon: 'RefreshCw', insertText: '/reset', group: '会话' },
     // 模板与质量命令
     { id: 'cmd_templates', label: '/templates', sublabel: '查看所有场景模板', icon: 'Palette', insertText: '列出所有已安装的场景模板（prompt-templates），包括名称、分类和触发词', group: '模板 & 质量' },
     { id: 'cmd_craft', label: '/craft', sublabel: '查看质量检查规则', icon: 'Shield', insertText: '列出所有已安装的 craft 质量检查规则，包括名称、分类和严重级别', group: '模板 & 质量' },
-    { id: 'cmd_context', label: '/context', sublabel: '查看当前注入的上下文', icon: 'FileText', insertText: '当前对话中注入了哪些上下文片段？包括技能、模板、craft 规则、pipeline 阶段', group: '模板 & 质量' },
+    { id: 'cmd_context', label: '/context', sublabel: '查看当前注入的上下文', icon: 'FileText', insertText: '当前对话中注入了哪些上下文片段？包括模板、craft 规则、pipeline 阶段', group: '模板 & 质量' },
   ], [])
 
   // ========== 打开菜单 ==========
   const openMenu = useCallback(async (trigger: TriggerType, filter: string) => {
     // 按需懒加载数据
     if (trigger === '@') {
-      // @ 每次都重新加载 cwd 文件；技能和模板只加载一次
+      // @ 每次都重新加载 cwd 文件；模板只加载一次
       await loadWorkspaceFiles()
-      if (!loadedRef.current.skills) await loadSkills()
       await loadTemplates()
     } else if (trigger === '#' && !loadedRef.current.artifacts) {
       await loadArtifacts()
-    } else if (trigger === '/') {
-      if (!loadedRef.current.skills) await loadSkills()
     }
 
     let items: TriggerItem[] = []
     if (trigger === '@') {
-      // @ 混合三个数据源：工作区文件 + 技能 + 模板
+      // @ 混合两个数据源：工作区文件 + 模板
       const fileItems = workspaceFilesRef.current.map(item => ({ ...item, group: item.group || '工作区文件' }))
-      const skillItems = skillsRef.current.map(item => ({
-        ...item,
-        id: `at_${item.id}`,
-        insertText: `@skill:${item.label} `,
-        group: '技能',
-      }))
-      items = [...fileItems, ...skillItems, ...templatesRef.current]
+      items = [...fileItems, ...templatesRef.current]
     } else if (trigger === '#') {
       items = artifactsRef.current
     } else if (trigger === '/') {
-      const skillItems = skillsRef.current.map(item => ({ ...item, group: '技能' }))
-      items = [...slashCommands, ...skillItems]
+      items = [...slashCommands]
     }
 
     // 模糊匹配过滤 + 排序
@@ -267,7 +233,7 @@ export function useTriggerSearch(isElectron: boolean) {
       selectedIndex: 0,
       isOpen: true,
     })
-  }, [loadWorkspaceFiles, loadArtifacts, loadSkills, slashCommands])
+  }, [loadWorkspaceFiles, loadArtifacts, slashCommands])
 
   // ========== 关闭菜单 ==========
   const closeMenu = useCallback(() => {
@@ -341,7 +307,6 @@ export function useTriggerSearch(isElectron: boolean) {
     // 数据刷新
     refreshWorkspace: loadWorkspaceFiles,
     refreshArtifacts: loadArtifacts,
-    refreshSkills: loadSkills,
     // 工作区切换时调用，清空缓存强制下次重新加载
     resetWorkspaceCache: () => {
       workspaceFilesRef.current = []

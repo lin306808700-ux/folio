@@ -3,7 +3,7 @@
 /**
  * 关键词提取与匹配工具模块
  * 复用 semantic-cache 中的分词、同义词扩展、Jaccard 相似度算法
- * 用于记忆裁剪、技能匹配、上下文按需加载
+ * 用于记忆裁剪、上下文按需加载
  */
 
 // 同义词组 — 同一组内的词视为等价
@@ -194,44 +194,6 @@ function filterMemories(memories, userInput, options = {}) {
   return memories.slice(0, recentFallback)
 }
 
-/**
- * 从技能列表中筛选与用户输入相关的技能
- * @param {Array} skills - 技能列表 [{name, description, ...}]
- * @param {string} userInput - 用户输入
- * @param {number} maxResults - 最大返回数，默认 10
- * @returns {Array} 筛选后的技能列表（按相关性降序）
- */
-function filterSkills(skills, userInput, maxResults = 10) {
-  if (!skills || skills.length === 0) return []
-  if (skills.length <= maxResults) return skills
-  if (!userInput) return skills.slice(0, maxResults)
-
-  const keywords = extractKeywords(userInput)
-  if (keywords.size === 0) return skills.slice(0, maxResults)
-
-  const scored = skills.map(skill => {
-    const text = `${skill.name || ''} ${skill.description || ''}`
-    return {
-      skill,
-      score: scoreText(text, keywords)
-    }
-  })
-
-  return scored
-    .sort((a, b) => b.score - a.score)
-    .slice(0, maxResults)
-    .map(s => s.skill)
-}
-
-/**
- * 本地关键词匹配技能（已废弃，保留函数以防残留引用）
- * 技能触发已改为用户手动选择，不再自动匹配
- * @deprecated
- */
-function matchSkillByKeywords() {
-  return { matched: false, confidence: 0 }
-}
-
 module.exports = {
   SYNONYM_GROUPS,
   STOP_WORDS,
@@ -241,5 +203,4 @@ module.exports = {
   extractKeywords,
   scoreText,
   filterMemories,
-  filterSkills,
 }

@@ -1,5 +1,32 @@
 const { app, BrowserWindow, ipcMain, shell } = require('electron')
 
+// 品牌迁移（必须在任何业务模块读写数据目录前执行）：
+// userData：ai-terminal / AI Terminal → Folio；家目录：~/.ai-terminal → ~/.folio
+const path = require('path')
+const fs = require('fs')
+try {
+  const appData = app.getPath('appData')
+  const targetUserData = path.join(appData, 'Folio')
+  if (!fs.existsSync(targetUserData)) {
+    for (const legacy of ['ai-terminal', 'AI Terminal']) {
+      const legacyDir = path.join(appData, legacy)
+      if (fs.existsSync(legacyDir)) {
+        fs.renameSync(legacyDir, targetUserData)
+        console.log(`[Main] 已迁移 userData 目录：${legacy} → Folio`)
+        break
+      }
+    }
+  }
+  const legacyHome = path.join(app.getPath('home'), '.ai-terminal')
+  const folioHome = path.join(app.getPath('home'), '.folio')
+  if (fs.existsSync(legacyHome) && !fs.existsSync(folioHome)) {
+    fs.renameSync(legacyHome, folioHome)
+    console.log('[Main] 已迁移数据目录 ~/.ai-terminal → ~/.folio')
+  }
+} catch (error) {
+  console.warn('[Main] 数据目录迁移失败:', error.message)
+}
+
 // 过滤 macOS 系统级 Electron 噪音日志，不影响其他输出
 const originalStderrWrite = process.stderr.write.bind(process.stderr)
 process.stderr.write = (chunk, encoding, callback) => {
@@ -29,7 +56,6 @@ const contextBuilder = require('./context-builder')
 const tokenMonitor = require('./token-monitor')
 const taskStateManager = require('./task-engine/state')
 const taskEngine = require('./task-engine')
-const { Skills } = require('./database')
 const museAgent = require('./muse-agent')
 const { startServer: startStaticServer } = require('./muse/static-server')
 // Python engine 已迁移到 Node.js react-engine，不再需要启动外部进程
@@ -42,7 +68,6 @@ const dingtalkServer = _dingtalkEnabled ? require('./muse/dingtalk-server') : nu
 // IPC handlers
 const dbHandlers = require('./ipc/db-handlers')
 const aiHandlers = require('./ipc/ai-handlers')
-const skillHandlers = require('./ipc/skill-handlers')
 const taskHandlers = require('./ipc/task-handlers')
 const workspaceHandlers = require('./ipc/workspace-handlers')
 const snapshotHandlers = require('./ipc/snapshot-handlers')
@@ -84,7 +109,6 @@ app.whenReady().then(async () => {
   terminalManager.registerHandlers(ipcMain)
   dbHandlers.register(ipcMain)
   aiHandlers.register(ipcMain, mainWindow)
-  skillHandlers.register(ipcMain)
   taskHandlers.register(ipcMain, mainWindow)
   workspaceHandlers.register(ipcMain)
   snapshotHandlers.register()
@@ -126,15 +150,6 @@ app.whenReady().then(async () => {
   
   // 心跳默认关闭，需在 Muse 页面手动开启
   // museAgent.startHeartbeat()
-
-  // 启动 skills 目录监听，变化时通知前端刷新
-  Skills.onChanged(() => {
-    const win = BrowserWindow.getAllWindows()[0]
-    if (win && !win.isDestroyed()) {
-      win.webContents.send('skills:changed')
-    }
-  })
-  Skills.watchDir()
 
   // 初始化语义缓存并启动定期清理
   try {

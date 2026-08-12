@@ -23,7 +23,7 @@ class CommandTool {
    * 
    * @param {string|object} command - 命令字符串或包含 command 属性的对象
    * @param {object} options - 选项
-   * @param {boolean} options.trusted - 是否为可信命令（跳过安全检查，用于 autoExecute 技能）
+   * @param {boolean} options.trusted - 是否为可信命令（跳过安全检查，用于 autoExecute 自动执行）
    */
   async execute(command, options = {}) {
     // 处理对象参数 { command: '...', ... }

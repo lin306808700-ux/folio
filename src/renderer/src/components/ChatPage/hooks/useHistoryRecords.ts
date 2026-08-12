@@ -58,7 +58,7 @@ function buildHistoryAiMessage(record: any): Message {
   // 其余（含所有协议标记）以纯文本呈现，剥除协议原文避免泄漏源码
   // 包含 ARTIFACT/RICH_FORM/COMMAND_OPTIONS 的兜底：当上方专属解析器因 JSON 修复失败而返回 null 时，
   // 此处截断标记之后的全部内容，防止原始 JSON+HTML 源码泄漏到气泡
-  const protocolSplit = rawContent.search(/MUSE_TASK:|SCRIPT_BLOCK:|SEARCH_REPLACE:|ARTIFACT:|RICH_FORM:|COMMAND_OPTIONS:|SKILL_UPDATE:|INSTALL_SKILL:|SAVE_SKILL:/)
+  const protocolSplit = rawContent.search(/MUSE_TASK:|SCRIPT_BLOCK:|SEARCH_REPLACE:|ARTIFACT:|RICH_FORM:|COMMAND_OPTIONS:/)
   if (protocolSplit >= 0) {
     const textBefore = rawContent.slice(0, protocolSplit).trim()
     return { ...base, content: textBefore || rawContent }

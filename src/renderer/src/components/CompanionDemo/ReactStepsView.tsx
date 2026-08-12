@@ -148,7 +148,7 @@ const FAKE_STEPS: ReActStep[] = [
     thought: '看到了主要文件，再看一下 package.json 了解技术栈。',
     action: 'read_file',
     input: 'package.json',
-    observation: '{\n  "name": "ai-terminal",\n  "dependencies": {\n    "electron": "^41.0.2",\n    "react": "^18.3.1",\n    "framer-motion": "^12.40.0"\n  }\n}',
+    observation: '{\n  "name": "folio",\n  "dependencies": {\n    "electron": "^41.0.2",\n    "react": "^18.3.1",\n    "framer-motion": "^12.40.0"\n  }\n}',
   },
   {
     id: 3,

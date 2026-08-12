@@ -1,6 +1,6 @@
-# Contributing to Muse AI Terminal
+# Contributing to Muse Folio
 
-感谢你愿意参与 Muse AI Terminal。项目仍在建立公开协作流程，当前最需要的是可复现问题、测试、文档和跨平台验证。
+感谢你愿意参与 Muse Folio。项目仍在建立公开协作流程，当前最需要的是可复现问题、测试、文档和跨平台验证。
 
 ## 开始之前
 

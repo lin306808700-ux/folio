@@ -107,7 +107,7 @@ const FAKE_OUTPUT: string[] = [
   'added 127 packages in 4.2s',
   '',
   '$ npm run build',
-  '> ai-terminal@1.0.0 build',
+  '> folio@1.0.0 build',
   '> cd src/renderer && npm run build',
   '',
   'Compiling TypeScript...',

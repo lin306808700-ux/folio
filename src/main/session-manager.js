@@ -13,10 +13,6 @@ let sessionContextState = {
   requestCount: 0,
   injectedSystemPrompt: false,
   injectedMemories: false,
-  injectedSkillList: false,
-  lastActiveSkillId: null,
-  lastSkillEditMode: null,
-  lastSkillListHash: '',
   lastMemoryHash: '',
 }
 
@@ -26,10 +22,6 @@ function resetContextState() {
     requestCount: 0,
     injectedSystemPrompt: false,
     injectedMemories: false,
-    injectedSkillList: false,
-    lastActiveSkillId: null,
-    lastSkillEditMode: null,
-    lastSkillListHash: '',
     lastMemoryHash: '',
   }
 }

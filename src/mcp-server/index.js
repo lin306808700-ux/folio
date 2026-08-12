@@ -2,7 +2,7 @@
 'use strict'
 
 /**
- * Muse AI-Terminal MCP Server
+ * Muse Folio MCP Server
  *
  * 通过 Model Context Protocol 暴露 Muse 的工具能力。
  * 让 Claude Desktop、Cursor、Windsurf 等 MCP Client 可以调用。
@@ -18,7 +18,7 @@
  *     "mcpServers": {
  *       "muse": {
  *         "command": "node",
- *         "args": ["/path/to/muse-ai-terminal/src/mcp-server/index.js"]
+ *         "args": ["/path/to/muse-folio/src/mcp-server/index.js"]
  *       }
  *     }
  *   }
@@ -34,7 +34,7 @@ const readline = require('readline')
 const execAsync = promisify(exec)
 
 const PROTOCOL_VERSION = '2025-06-18'
-const SERVER_NAME = 'muse-ai-terminal'
+const SERVER_NAME = 'muse-folio'
 const SERVER_VERSION = '1.0.0'
 
 // ========== 工具定义 ==========

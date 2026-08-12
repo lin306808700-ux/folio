@@ -9,8 +9,6 @@ export interface SlashCommand {
 const SLASH_COMMANDS: SlashCommand[] = [
   { command: '/self-check', description: '运行系统自检（全部场景）', icon: 'Shield' },
   { command: '/self-check 任务编排执行', description: '自检：任务编排执行分组', icon: 'Shield' },
-  { command: '/self-check 技能CRUD', description: '自检：技能CRUD分组', icon: 'Shield' },
-  { command: '/self-check 技能执行', description: '自检：技能执行分组', icon: 'Shield' },
   { command: '/self-check 记忆与系统集成', description: '自检：记忆与系统集成分组', icon: 'Shield' },
   { command: '/clear', description: '清空当前对话', icon: 'Trash2' },
   { command: '/reset', description: '重置会话（新 sessionId）', icon: 'RefreshCw' },

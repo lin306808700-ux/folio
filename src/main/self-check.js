@@ -127,7 +127,7 @@ class SelfCheckRunner {
     const totalCount = results.length;
     const totalDuration = results.reduce((sum, r) => sum + (r.duration || 0), 0);
 
-    let report = `## AI Terminal 自检报告\n\n`;
+    let report = `## Folio 自检报告\n\n`;
     report += `> 共 ${totalCount} 个场景，${totalPass} 个通过，${totalCount - totalPass} 个失败 | 总耗时: ${(totalDuration / 1000).toFixed(1)}s\n\n`;
 
     for (const [groupName, items] of Object.entries(groups)) {
@@ -174,27 +174,10 @@ class SelfCheckRunner {
 
   /**
    * 清理自检产生的测试数据
-   * @param {Object} database - { Skills, Memories, History }
+   * @param {Object} database - { Memories, History }
    */
   async cleanup(database) {
     console.log('[SelfCheck] 开始清理测试数据...');
-
-    // 清理 __selfcheck_ 前缀的技能
-    if (database?.Skills) {
-      try {
-        const allSkills = database.Skills.getAll();
-        const testSkills = allSkills.filter(s =>
-          (s.name && s.name.includes('__selfcheck_')) ||
-          (s.id && s.id.includes('__selfcheck_'))
-        );
-        for (const skill of testSkills) {
-          database.Skills.delete(skill.id || skill.name);
-          console.log('[SelfCheck] 已清理技能:', skill.name);
-        }
-      } catch (e) {
-        console.warn('[SelfCheck] 清理技能失败:', e.message);
-      }
-    }
 
     // 清理 __selfcheck_ 前缀的记忆
     if (database?.Memories) {

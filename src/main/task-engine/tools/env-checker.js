@@ -7,7 +7,7 @@ const path = require('path');
 /**
  * 环境检测工具
  * 检测运行环境（Python/Node/ffmpeg/conda 等）和依赖安装状态
- * 用于技能执行前的 precheck
+ * 用于任务执行前的 precheck
  */
 class EnvCheckerTool {
   constructor() {
@@ -194,11 +194,11 @@ class EnvCheckerTool {
   }
 
   /**
-   * 技能执行前的环境预检
-   * 根据技能 SKILL.md 中声明的 sideEffects/requirements 检测
+   * 执行前的环境预检
+   * 根据声明的 requirements 检测
    * @param {object} params
-   * @param {string[]} params.requires - 技能所需工具列表
-   * @param {string[]} params.pythonPackages - 技能所需 Python 包
+   * @param {string[]} params.requires - 所需工具列表
+   * @param {string[]} params.pythonPackages - 所需 Python 包
    * @param {string} params.cwd - 工作目录
    */
   async precheck(params = {}) {

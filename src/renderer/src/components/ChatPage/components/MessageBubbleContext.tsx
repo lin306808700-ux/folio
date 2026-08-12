@@ -10,10 +10,8 @@ export interface MessageBubbleContextValue {
   onExecuteCommand: () => void
   onExecuteScript: (runCommand: string) => void
   onExecuteSpecificCommand: (cmd: string, label: string) => void
-  onInstallSkill: (skillData: { url: string; skillName?: string }) => void
   onConfirmTask: (taskId: string, confirmed: boolean, modifiedStep?: any) => void
   onRetry: (request: string | ChatRequestEnvelope) => void
-  onSkillsSaved: () => void
   onAnalyzeOutput?: () => void
   onQuote?: (msg: Message) => void
   onEditStep?: (stepId: number, newDescription: string) => void

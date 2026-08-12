@@ -35,7 +35,7 @@ export function MuseSpace({ onSummonChat }: MuseSpaceProps) {
     return '从一个问题开始，或者继续最近的学习。'
   }, [data.currentTask, data.unreadCount])
 
-  // 功能减法：信箱/作品/技能入口已隐藏，首页只保留学习主链路
+  // 功能减法：信箱/作品入口已隐藏，首页只保留学习主链路
   const actions = [
     { label: '学习图谱', detail: '结构化学习与知识沉淀', icon: BookOpen, color: '#6db5a8', onClick: () => navigate('/learning') },
     { label: '历史', detail: data.journalCount ? `${data.journalCount} 篇日志` : '回到过去对话', icon: History, color: '#72a6d8', onClick: () => navigate('/history') },

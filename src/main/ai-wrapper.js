@@ -447,7 +447,7 @@ function processAIResponse(content, webSearched, mainWindow) {
   cleanedContent = cleanedContent.replace(/```bash\n?/g, '').replace(/```\n?/g, '').trim()
 
   // 检测响应中包含哪些指令
-  const detectedDirectives = ['SEARCH_REPLACE', 'SCRIPT_BLOCK', 'MUSE_TASK', 'SKILL_UPDATE', 'COMMAND_OPTIONS', 'INSTALL_SKILL', 'SAVE_SKILL']
+  const detectedDirectives = ['SEARCH_REPLACE', 'SCRIPT_BLOCK', 'MUSE_TASK', 'COMMAND_OPTIONS']
     .filter(directive => new RegExp(`${directive}:`, 'i').test(cleanedContent))
   console.log(`[AI][processAIResponse] 响应长度: ${content.length}${detectedDirectives.length ? ' | 指令: ' + detectedDirectives.join(', ') : ''}`)
 

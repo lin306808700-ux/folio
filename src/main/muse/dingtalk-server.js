@@ -4,7 +4,7 @@
  * 钉钉 Outgoing 机器人服务
  * 接收来自钉钉群的消息，转给 Muse 处理后回复
  *
- * 配置方式：在 ~/.ai-terminal/muse/dingtalk.json 中添加：
+ * 配置方式：在 ~/.folio/muse/dingtalk.json 中添加：
  * {
  *   "webhook": "https://...",
  *   "secret": "SEC...",
@@ -240,7 +240,7 @@ async function handleIncomingMessage(message) {
         const taskCommand = analysis.taskCommand || content
         addTask(taskCommand, 'high', { source: 'dingtalk', senderNick })
 
-        // 发信给主人（在 AI Terminal 中可见）
+        // 发信给主人（在 Folio 中可见）
         sendLetter({
           title: analysis.letterTitle || `📨 收到钉钉任务`,
           content: analysis.letterContent || `来自 ${senderNick} 的任务：\n${taskCommand}`,

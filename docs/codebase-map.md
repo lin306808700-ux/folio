@@ -1,11 +1,11 @@
 # Codebase Map
 
-This is the working knowledge base for AI Terminal. Keep it concise and update it
+This is the working knowledge base for Folio. Keep it concise and update it
 when ownership boundaries, data flows, or product contracts change.
 
 ## Runtime Architecture
 
-AI Terminal is an Electron application with four important boundaries:
+Folio is an Electron application with four important boundaries:
 
 1. `src/renderer/src/`: React UI. It owns presentation and transient UI state.
 2. `src/preload/index.js`: context-isolated API exposed as `window.electronAPI`.
@@ -78,7 +78,7 @@ The active chat is transient renderer state:
 - `src/main/muse/react-engine.js` owns the ReAct loop, interruption, checkpoints,
   planning behavior, and tool-call progression.
 - `src/main/task-engine/` owns persistent task state and tool execution.
-- `src/main/task-engine/tools/` contains file, command, browser, skill, memory, and
+- `src/main/task-engine/tools/` contains file, command, memory, and
   environment tools.
 - `src/main/sandbox.js`, `command-policy.js`, and `security-analyzer.js` enforce
   workspace and command safety.
@@ -97,7 +97,6 @@ Routes are declared in `src/renderer/src/App.tsx`:
 | `/learning` | Persistent learning maps, knowledge nodes, mastery evidence, and current position |
 | `/ideas` | 缪斯: 来信 and 目标 only |
 | `/artifacts` | 作品 gallery |
-| `/skills` | Skill list and detail workspace |
 | `/history` | Saved conversation records |
 
 Shared chrome:

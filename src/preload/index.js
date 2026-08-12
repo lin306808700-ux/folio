@@ -184,27 +184,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     craft: {
       list: () => ipcRenderer.invoke('db:craft:list')
-    },
-    skills: {
-      getAll: () => ipcRenderer.invoke('db:skills:getAll'),
-      getAllFiles: () => ipcRenderer.invoke('db:skills:getAll'),  // 现在等于 getAll
-      loadFromFile: (filename) => ipcRenderer.invoke('db:skills:loadFromFile', filename),
-      add: (item) => ipcRenderer.invoke('db:skills:add', item),
-      update: (id, item) => ipcRenderer.invoke('db:skills:update', { id, item }),
-      delete: (id) => ipcRenderer.invoke('db:skills:delete', id),
-      install: (params) => ipcRenderer.invoke('skills:install', params),
-      installFromZip: (params) => ipcRenderer.invoke('skills:installFromZip', params),
-      selectZipFile: () => ipcRenderer.invoke('skills:selectZipFile'),
-      saveLocal: (params) => ipcRenderer.invoke('skill:saveLocal', params),
-      onChanged: (callback) => {
-        const subscription = () => callback()
-        ipcRenderer.on('skills:changed', subscription)
-        return () => ipcRenderer.removeListener('skills:changed', subscription)
-      },
-      create: (params) => ipcRenderer.invoke('skill:create', params),
-      suggest: (params) => ipcRenderer.invoke('skill:suggest', params),
-      stats: (skillId) => ipcRenderer.invoke('skill:stats', skillId),
-      recordUsage: (params) => ipcRenderer.invoke('skill:recordUsage', params)
     }
   },
   

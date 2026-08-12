@@ -1,7 +1,7 @@
 'use strict'
 
 /**
- * AI Terminal Muse 模块能力评测（含 Mock AI 全链路）
+ * Folio Muse 模块能力评测（含 Mock AI 全链路）
  * 
  * 6 个标准任务：
  *   Task 1: 意图路由分类准确性 (router.js classifyIntent)
@@ -2127,7 +2127,7 @@ async function runTask17() {
 // ============================================================
 async function runAllBenchmarks() {
   console.log('╔══════════════════════════════════════════════════════════╗')
-  console.log('║   AI Terminal / Muse 能力评测 (含 Mock AI 全链路)       ║')
+  console.log('║   Folio / Muse 能力评测 (含 Mock AI 全链路)       ║')
   console.log('╚══════════════════════════════════════════════════════════╝')
   console.log(`运行时间: ${new Date().toISOString()}`)
 

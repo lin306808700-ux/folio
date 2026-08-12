@@ -1,20 +1,19 @@
 import React, { useMemo } from 'react'
 import {
-  FolderOpen, File, FileText, Code, Image, Zap, Palette,
+  FolderOpen, File, FileText, Code, Image, Palette,
   Shield, Trash2, RefreshCw, Search, Layers
 } from 'lucide-react'
 import type { TriggerItem, TriggerType } from '../hooks/useTriggerSearch'
 
 // 图标名 → lucide 组件映射
 const iconComponents: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
-  FolderOpen, File, FileText, Code, Image, Zap, Palette,
+  FolderOpen, File, FileText, Code, Image, Palette,
   Shield, Trash2, RefreshCw, Layers,
 }
 
 // 分组图标映射
 const groupIcons: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
   '工作区文件': FolderOpen,
-  '技能': Zap,
   '场景模板': Palette,
   '系统': Shield,
   '会话': RefreshCw,
@@ -61,7 +60,7 @@ export function TriggerPopup({ trigger, items, selectedIndex, isOpen, onSelect, 
   const headerLabels: Record<TriggerType, string> = {
     '@': '引用',
     '#': '创作空间',
-    '/': '命令 & 技能',
+    '/': '命令',
   }
 
   return (
@@ -146,7 +145,7 @@ export function TriggerPopup({ trigger, items, selectedIndex, isOpen, onSelect, 
           <span>↑↓ 导航</span>
           <span>↵ 选择</span>
           <span>Esc 关闭</span>
-          {trigger === '@' && <span className="ml-auto">@ 文件 · 技能 · 模板</span>}
+          {trigger === '@' && <span className="ml-auto">@ 文件 · 模板</span>}
         </div>
       </div>
     </div>

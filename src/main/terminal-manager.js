@@ -5,7 +5,7 @@ const path = require('path')
 const fs = require('fs')
 
 const HOME = process.env.HOME || process.env.USERPROFILE || ''
-const AI_TERMINAL_DIR = path.join(HOME, '.ai-terminal')
+const AI_TERMINAL_DIR = path.join(HOME, '.folio')
 const WORKSPACE_CONFIG_PATH = path.join(AI_TERMINAL_DIR, 'workspace.json')
 // shell precmd hook 将 $PWD 实时写入此文件，供 listCwdFiles 读取
 const CWD_FILE = path.join(AI_TERMINAL_DIR, 'terminal-cwd')
@@ -61,7 +61,7 @@ function registerHandlers(ipcMain) {
     console.log('[Main] 使用 shell:', shell)
 
     try {
-      // 确保 .ai-terminal 目录存在
+      // 确保 .folio 目录存在
       if (!fs.existsSync(AI_TERMINAL_DIR)) fs.mkdirSync(AI_TERMINAL_DIR, { recursive: true })
 
       ptyProcess = pty.spawn(shell, [], {

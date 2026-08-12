@@ -340,8 +340,8 @@ class BrowserViewManager {
       const image = await this.browserView.webContents.capturePage()
       const { filename = `screenshot-${Date.now()}.png` } = typeof params === 'object' ? params : {}
 
-      // 保存截图文件到 ~/.ai-terminal/screenshots/
-      const screenshotDir = path.join(process.env.HOME || '', '.ai-terminal', 'screenshots')
+      // 保存截图文件到 ~/.folio/screenshots/
+      const screenshotDir = path.join(process.env.HOME || '', '.folio', 'screenshots')
       if (!fs.existsSync(screenshotDir)) {
         fs.mkdirSync(screenshotDir, { recursive: true })
       }

@@ -50,13 +50,10 @@ const breakdownLabels: Record<string, string> = {
   envContext: '项目环境',
   workspaceContext: '工作区',
   memoryContext: '主人画像',
-  skillListContext: '技能清单',
-  skillContext: '激活技能',
   userInput: '用户输入',
   searchContext: '搜索结果',
   browserContext: '浏览器',
   scriptExecContext: '脚本结果',
-  mentionedSkillContext: '提及技能',
   deltaFragments: '增量片段',
 }
 

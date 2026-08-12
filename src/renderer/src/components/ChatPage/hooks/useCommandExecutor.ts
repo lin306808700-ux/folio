@@ -11,7 +11,6 @@ interface UseCommandExecutorOptions {
   commandToExecute: string | undefined
   setCommandToExecute: React.Dispatch<React.SetStateAction<string | undefined>>
   setSafetyLevel: (v: 'SECURE' | 'CAUTION' | 'DANGER') => void
-  refreshSkills: () => void
 }
 
 export function useCommandExecutor(options: UseCommandExecutorOptions) {
@@ -22,8 +21,7 @@ export function useCommandExecutor(options: UseCommandExecutorOptions) {
     pendingCommand,
     setPendingCommand,
     setCommandToExecute,
-    setSafetyLevel,
-    refreshSkills
+    setSafetyLevel
   } = options
 
   // 安全执行命令
@@ -103,30 +101,6 @@ export function useCommandExecutor(options: UseCommandExecutorOptions) {
     safeExecute(cmd, `已执行：${label}`)
   }, [safeExecute])
 
-  const installSkill = useCallback(async (skillData: { url: string; skillName?: string }) => {
-    if (!window.electronAPI) return
-    setLoading(true)
-    try {
-      const result = await window.electronAPI.db.skills.install({ url: skillData.url, skillName: skillData.skillName })
-      if (result.success) {
-        const successMsg: Message = {
-          id: `skill-success-${Date.now()}`, role: 'assistant',
-          content: `✅ 技能安装成功！\n\n技能名称：${result.skill?.name}\n描述：${result.skill?.description || '无'}\n\n已添加到技能矩阵。`,
-          type: 'text'
-        }
-        setMessages(prev => [...prev, successMsg])
-        refreshSkills()
-      } else {
-        throw new Error(result.error || '安装失败')
-      }
-    } catch (error: any) {
-      const errorMsg: Message = { id: `skill-error-${Date.now()}`, role: 'assistant', content: `❌ 技能安装失败：${error.message}`, type: 'text' }
-      setMessages(prev => [...prev, errorMsg])
-    } finally {
-      setLoading(false)
-    }
-  }, [setLoading, setMessages, refreshSkills])
-
   const confirmTaskAction = useCallback(async (taskId: string, confirmed: boolean, modifiedStep?: any) => {
     if (!window.electronAPI || !window.electronAPI.task) return
     setLoading(true)
@@ -150,7 +124,6 @@ export function useCommandExecutor(options: UseCommandExecutorOptions) {
     executeCommand,
     executeScript,
     executeSpecificCommand,
-    installSkill,
     confirmTaskAction
   }
 }

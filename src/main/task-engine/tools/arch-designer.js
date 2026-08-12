@@ -171,7 +171,7 @@ class ArchDesignerTool {
       if (!isRunning) {
         return {
           success: false,
-          error: '架构图编辑器 dev server 尚未就绪，请稍后重试。如果持续失败，请在终端手动执行: cd ai-terminal/arch-designer && npx webpack serve',
+          error: '架构图编辑器 dev server 尚未就绪，请稍后重试。如果持续失败，请在终端手动执行: cd folio/arch-designer && npx webpack serve',
           needConfirm: false
         }
       }

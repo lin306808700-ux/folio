@@ -18,32 +18,14 @@ export interface ElectronAPI {
       userInput: string
       empId?: string
       sessionId?: string
-      skillPrompt?: string
       scriptTemplate?: any
-      activeSkillId?: string  // 当前激活技能的目录名，用于后端 autoExecute 拦截
-      skillEditMode?: {       // 技能编辑模式信息
-        id: string            // 技能 ID（目录名）
-        name: string          // 技能名称
-        content: string       // 技能完整内容
-        description?: string  // 技能描述
-        isNew?: boolean       // 是否为新建技能
-      }
     }) => Promise<{ success: boolean; content?: string; error?: string; webSearched?: boolean; isTask?: boolean; isScript?: boolean; isSearchReplace?: boolean }>
     // 流式调用（发起请求，数据通过 IPC 事件推送）
     stream: (params: {
       userInput: string
       empId?: string
       sessionId?: string
-      skillPrompt?: string
       scriptTemplate?: any
-      activeSkillId?: string
-      skillEditMode?: {
-        id: string
-        name: string
-        content: string
-        description?: string
-        isNew?: boolean
-      }
     }) => Promise<{ success: boolean }>
     // 中断流式响应
     abortStream: () => Promise<{ success: boolean }>
@@ -76,19 +58,6 @@ export interface ElectronAPI {
       getAll: () => Promise<any[]>
       add: (item: { title?: string; content: string }) => Promise<any>
       delete: (id: string) => Promise<boolean>
-    }
-    skills: {
-      getAll: () => Promise<any[]>
-      getAllFiles: () => Promise<any[]>
-      loadFromFile: (filename: string) => Promise<any>
-      add: (item: { name: string; description?: string; prompt: string; icon?: string }) => Promise<any>
-      delete: (id: string) => Promise<boolean>
-      install: (params: { url: string; skillName?: string }) => Promise<{ success: boolean; skill?: any; error?: string }>
-      installFromZip: (params: { zipPath: string }) => Promise<{ success: boolean; skill?: any; error?: string }>
-      selectZipFile: () => Promise<{ success: boolean; filePath?: string; canceled?: boolean }>
-      saveLocal: (params: { name: string; description?: string; prompt?: string; scriptTemplate?: any }) => Promise<{ success: boolean; skill?: any; error?: string }>
-      update: (id: string, item: any) => Promise<any>
-      onChanged: (callback: () => void) => () => void
     }
   }
   // 脚本子进程执行事件

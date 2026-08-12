@@ -1,8 +1,21 @@
 'use strict'
 
+const fs = require('fs')
 const path = require('path')
 
-const MUSE_HOME = path.join(process.env.HOME, '.ai-terminal/muse')
+// 一次性迁移：旧版数据目录 ~/.ai-terminal → ~/.folio（新目录不存在时才迁移，不覆盖）
+try {
+  const legacyHome = path.join(process.env.HOME, '.ai-terminal')
+  const folioHome = path.join(process.env.HOME, '.folio')
+  if (fs.existsSync(legacyHome) && !fs.existsSync(folioHome)) {
+    fs.renameSync(legacyHome, folioHome)
+    console.log('[Muse] 已迁移数据目录 ~/.ai-terminal → ~/.folio')
+  }
+} catch (error) {
+  console.warn('[Muse] 数据目录迁移失败:', error.message)
+}
+
+const MUSE_HOME = path.join(process.env.HOME, '.folio/muse')
 // ReAct 工具的默认工作目录（从模块位置反推项目根目录：src/main/muse → ../../../../）
 const PROJECT_DIR = process.env.WORKSPACE_PATH || path.resolve(__dirname, '../../../../')
 const JOURNAL_DIR = path.join(MUSE_HOME, 'journal')
@@ -40,7 +53,6 @@ const EXPLORE_HISTORY_FILE = path.join(MUSE_HOME, 'explore-history.json')
 const MAX_PROFILE_LENGTH = 200         // 画像截取长度
 const MAX_RECENT_CHATS = 3             // 最近对话条数
 const MAX_UNREAD_LETTERS_THRESHOLD = 5 // 未读信件阈值
-const MAX_SKILLS_DISPLAY = 10          // 最大技能显示数
 const MAX_MEMORIES_DISPLAY = 5         // 最大记忆显示数
 const MAX_PROFILES_DISPLAY = 3         // 最大画像维度数
 
@@ -97,7 +109,6 @@ module.exports = {
   MAX_PROFILE_LENGTH,
   MAX_RECENT_CHATS,
   MAX_UNREAD_LETTERS_THRESHOLD,
-  MAX_SKILLS_DISPLAY,
   MAX_MEMORIES_DISPLAY,
   MAX_PROFILES_DISPLAY,
   // 大文件分块分析配置

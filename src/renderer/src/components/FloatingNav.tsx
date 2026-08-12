@@ -139,7 +139,7 @@ export function FloatingNav() {
   }, [location.pathname])
 
   const navItems: NavItem[] = [
-    // 功能减法：只保留学习体验主链路，技能/变更分析/信箱/作品入口已隐藏
+    // 功能减法：只保留学习体验主链路，变更分析/信箱/作品入口已隐藏
     { path: '/chat', label: '对话', icon: MessageCircle },
     { path: '/learning', label: '学习图谱', icon: BookOpen },
     { path: '/history', label: '历史', icon: History },

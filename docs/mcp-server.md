@@ -1,6 +1,6 @@
 # MCP Server 配置指南
 
-Muse AI-Terminal 实现了 [Model Context Protocol](https://modelcontextprotocol.io) Server，可以将 Muse 的工具能力暴露给 Claude Desktop、Cursor 等 MCP Client。
+Muse Folio 实现了 [Model Context Protocol](https://modelcontextprotocol.io) Server，可以将 Muse 的工具能力暴露给 Claude Desktop、Cursor 等 MCP Client。
 
 ## 可用工具
 
@@ -22,7 +22,7 @@ Muse AI-Terminal 实现了 [Model Context Protocol](https://modelcontextprotocol
   "mcpServers": {
     "muse": {
       "command": "node",
-      "args": ["/path/to/muse-ai-terminal/src/mcp-server/index.js"]
+      "args": ["/path/to/muse-folio/src/mcp-server/index.js"]
     }
   }
 }
@@ -39,7 +39,7 @@ Muse AI-Terminal 实现了 [Model Context Protocol](https://modelcontextprotocol
   "mcpServers": {
     "muse": {
       "command": "node",
-      "args": ["/path/to/muse-ai-terminal/src/mcp-server/index.js"]
+      "args": ["/path/to/muse-folio/src/mcp-server/index.js"]
     }
   }
 }

@@ -4,9 +4,9 @@
  * 应用设置持久化存储
  *
  * 配置保存在 userData 目录（asar 之外），安装后由用户在应用内填写：
- * - macOS:   ~/Library/Application Support/AI Terminal/muse-settings.json
- * - Windows: %APPDATA%/AI Terminal/muse-settings.json
- * - Linux:   ~/.config/AI Terminal/muse-settings.json
+ * - macOS:   ~/Library/Application Support/Folio/muse-settings.json
+ * - Windows: %APPDATA%/Folio/muse-settings.json
+ * - Linux:   ~/.config/Folio/muse-settings.json
  *
  * 启动时（index.js 加载业务模块之前）将配置注入 process.env，
  * model-provider.js 照常从环境变量读取，无需改动调用链。
@@ -17,7 +17,7 @@ const os = require('os')
 const path = require('path')
 
 // 与 package.json build.productName 保持一致
-const PRODUCT_NAME = 'AI Terminal'
+const PRODUCT_NAME = 'Folio'
 const SETTINGS_FILE = 'muse-settings.json'
 
 /**

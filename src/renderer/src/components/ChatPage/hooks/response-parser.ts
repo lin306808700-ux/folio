@@ -1,6 +1,6 @@
 /**
  * AI 响应解析器
- * 从 AI 返回的文本中检测并提取技能安装/保存/更新、命令选项等结构化数据
+ * 从 AI 返回的文本中检测并提取命令选项等结构化数据
  */
 
 /**
@@ -65,36 +65,6 @@ function extractDirectiveJSON(response: string, directive: string): Record<strin
   }
 
   return null
-}
-
-/** 解析 INSTALL_SKILL 指令 */
-export function parseSkillInstall(response: string): { url: string; skillName?: string } | null {
-  const data = extractDirectiveJSON(response, 'INSTALL_SKILL')
-  return data?.url ? data as { url: string; skillName?: string } : null
-}
-
-/** 解析 SAVE_SKILL 指令 */
-export function parseSkillSave(response: string): { name: string; description?: string; content: string } | null {
-  const data = extractDirectiveJSON(response, 'SAVE_SKILL')
-  if (!data || !data.name) return null
-
-  // AI 可能用 prompt 代替 content
-  if (!data.content && data.prompt) {
-    data.content = data.prompt
-  }
-
-  return data.content ? data as { name: string; description?: string; content: string } : null
-}
-
-/** 解析 SKILL_UPDATE 指令，返回 { data, textBefore } */
-export function parseSkillUpdate(response: string): { data: { id?: string; name: string; content: string; description?: string }; textBefore: string } | null {
-  if (!response.includes('SKILL_UPDATE:')) return null
-
-  const data = extractDirectiveJSON(response, 'SKILL_UPDATE')
-  if (!data || !data.name || !data.content) return null
-
-  const textBefore = response.split('SKILL_UPDATE:')[0].trim()
-  return { data: data as { id?: string; name: string; content: string; description?: string }, textBefore }
 }
 
 /** 解析 RICH_FORM 指令 */

@@ -41,7 +41,7 @@ function register(ipcMain, mainWindow) {
   // 获取截图文件
   ipcMain.handle('task:getScreenshot', async (event, filename) => {
     try {
-      const screenshotDir = path.join(process.env.HOME || '', '.ai-terminal', 'screenshots')
+      const screenshotDir = path.join(process.env.HOME || '', '.folio', 'screenshots')
       const filepath = path.join(screenshotDir, filename)
 
       if (!filepath.startsWith(screenshotDir)) {
@@ -65,7 +65,7 @@ function register(ipcMain, mainWindow) {
   // 打开截图文件所在目录
   ipcMain.handle('task:openInFolder', async (event, filename) => {
     try {
-      const screenshotDir = path.join(process.env.HOME || '', '.ai-terminal', 'screenshots')
+      const screenshotDir = path.join(process.env.HOME || '', '.folio', 'screenshots')
       const filepath = path.join(screenshotDir, filename)
 
       if (!filepath.startsWith(screenshotDir)) {

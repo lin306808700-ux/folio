@@ -16,10 +16,10 @@
 ├─────────────────────────────────────────────┤
 │              工具执行层                       │
 │  file │ apply_patch │ command │ browser     │
-│  search │ skill_loader │ sandbox             │
+│  search │ sandbox                            │
 ├─────────────────────────────────────────────┤
 │              持久化层                        │
-│  Task State │ Memory │ Skill Cache │ Trace   │
+│  Task State │ Memory │ Trace                 │
 └─────────────────────────────────────────────┘
 ```
 
@@ -98,10 +98,3 @@ class MyTool {
 ### 3. MCP 工具
 
 在 `src/mcp-server/index.js` 的 `TOOLS` 数组中添加工具定义，在 `executeTool()` 中添加执行逻辑。
-
-### 4. Skill
-
-在 `~/.ai-terminal/skills/` 下创建 `.md` 文件，按三层体系分类：
-- Tier 1: 编码质量规则
-- Tier 2: 工作流规则
-- Tier 3: 系统能力规则

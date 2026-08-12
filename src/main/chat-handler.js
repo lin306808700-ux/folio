@@ -2,7 +2,7 @@
 
 console.log('[ChatHandler] 模块加载 v2026-04-03 19:35')
 
-const { Skills, Memories: MemoriesDB, Skills: SkillsDB, History: HistoryDB } = require('./database')
+const { Memories: MemoriesDB, History: HistoryDB } = require('./database')
 const { callAIStream, analyzeImages, abortCallsByLabel } = require('../shared/ai-client')
 const path = require('path')
 const fs = require('fs')
@@ -59,7 +59,7 @@ function getWindow() {
  */
 function getWorkspacePath() {
   try {
-    const configPath = path.join(process.env.HOME || '', '.ai-terminal', 'workspace.json')
+    const configPath = path.join(process.env.HOME || '', '.folio', 'workspace.json')
     if (fs.existsSync(configPath)) {
       const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
       if (config.currentWorkspace && fs.existsSync(config.currentWorkspace)) {
@@ -72,7 +72,7 @@ function getWorkspacePath() {
   return process.env.HOME || ''
 }
 
-// ========== 构建任务回调（复用于自动执行技能和任务引擎） ==========
+// ========== 构建任务回调（复用于自检和任务引擎） ==========
 function buildTaskCallbacks(logPrefix) {
   const { ipcMain } = require('electron')
   
@@ -224,16 +224,15 @@ function buildTaskCallbacks(logPrefix) {
 /**
  * 核心对话处理函数
  */
-async function handleChat({ userInput, empId, sessionId, skillPrompt, scriptTemplate, activeSkillId, skillEditMode, skipIntentEngine }) {
+async function handleChat({ userInput, empId, sessionId, scriptTemplate, skipIntentEngine }) {
   // 交互式对话抢占后台学习图谱预生成，避免用户排在章节生成后面等待
   try { abortCallsByLabel('prefetch') } catch (_) {}
   console.log('[Main][handleChat] 收到请求:', { 
     userInput: userInput.substring(0, 100),
-    hasSkill: !!skillPrompt,
     browserViewReady: !!(_browserViewManager && _browserViewManager.isReady())
   })
   // ========== /self-check 自检命令拦截 ==========
-  // 自检是系统内置技能，复用任务引擎和 UnifiedTaskCard，不产生额外卡片
+  // 自检是系统内置能力，复用任务引擎和 UnifiedTaskCard，不产生额外卡片
   if (userInput.trim() === '/self-check' || userInput.trim().startsWith('/self-check ')) {
     const selfCheck = require('./self-check')
     const executor = require('./task-engine/executor')
@@ -263,7 +262,7 @@ async function handleChat({ userInput, empId, sessionId, skillPrompt, scriptTemp
     const result = await executor.execute(taskPlan, callbacks)
 
     // 自检结束后清理测试数据
-    await selfCheck.cleanup({ Memories: MemoriesDB, Skills: SkillsDB })
+    await selfCheck.cleanup({ Memories: MemoriesDB })
 
     if (result.status === 'completed') {
       return {
@@ -281,121 +280,12 @@ async function handleChat({ userInput, empId, sessionId, skillPrompt, scriptTemp
     }
   }
 
-  console.log(`[Main][handleChat] AI 调用开始: ${userInput.substring(0, 100)}${skillPrompt ? ' | 有技能' : ''}${activeSkillId ? ` | skill:${activeSkillId}` : ''}${skillEditMode ? ` | 编辑模式:${skillEditMode.name}${skillEditMode.isNew ? '(新建)' : ''}` : ''}${scriptTemplate ? ` | 脚本模板:${scriptTemplate.lang}` : ''}`)
+  console.log(`[Main][handleChat] AI 调用开始: ${userInput.substring(0, 100)}${scriptTemplate ? ` | 脚本模板:${scriptTemplate.lang}` : ''}`)
 
-  // ========== 自动执行技能 ==========
-  if (activeSkillId && !skillEditMode) {
-    const activeSkill = Skills.loadFromDir(activeSkillId)
-    if (activeSkill && activeSkill.autoExecute && activeSkill.steps && activeSkill.steps.length > 0) {
-      console.log('[Main] 检测到自动执行技能:', activeSkill.name, '共', activeSkill.steps.length, '个步骤')
-
-      try {
-        const executor = require('./task-engine/executor')
-
-        const taskPlan = {
-          id: `auto_skill_${Date.now()}`,
-          taskName: activeSkill.name,
-          skill: {
-            name: activeSkill.name,
-            requires: activeSkill.requires || [],
-            pythonPackages: activeSkill.pythonPackages || []
-          },
-          steps: activeSkill.steps.map(step => ({
-            ...step,
-            id: String(step.id),
-            dependsOn: step.dependsOn ? step.dependsOn.map(d => String(d)) : undefined,
-            type: step.type || 'execute'
-          })),
-          needConfirm: false,
-          summary: `正在执行技能：${activeSkill.name}`
-        }
-
-        const win = getWindow()
-        if (win) {
-          win.webContents.send('task:start', {
-            taskId: taskPlan.id,
-            steps: taskPlan.steps.map(step => ({
-              id: step.id,
-              description: step.description,
-              type: step.type,
-              status: 'pending',
-              params: step.params
-            }))
-          })
-        }
-
-        const callbacks = buildTaskCallbacks('AutoSkill')
-        // 自动执行技能有特殊的 onError 逻辑（pause 支持）
-        callbacks.onError = (error, stepIndex) => {
-          console.error('[AutoSkill] 技能执行失败:', error)
-          const failedStep = taskPlan.steps[stepIndex]
-          if (failedStep && failedStep.onError === 'pause') {
-            console.log('[AutoSkill] 步骤配置了 onError:pause，暂停执行')
-            const w = getWindow()
-            if (w) {
-              w.webContents.send('task:paused', {
-                error: error.message || error,
-                stepIndex,
-                step: failedStep,
-                canRetry: true
-              })
-            }
-          } else {
-            const w = getWindow()
-            if (w) w.webContents.send('task:error', { error: error.message || error, stepIndex })
-          }
-        }
-
-        const result = await executor.execute(taskPlan, callbacks)
-
-        if (result.status === 'paused') {
-          return {
-            success: true,
-            content: `TASK_PENDING_CONFIRM:${JSON.stringify({
-              taskId: result.taskId,
-              message: result.message,
-              preview: result.preview
-            })}`,
-            webSearched: false,
-            isTask: true,
-            isAutoSkill: true
-          }
-        }
-
-        if (result.status === 'completed') {
-          return {
-            success: true,
-            content: result.summary || '技能已执行完成',
-            webSearched: false,
-            isTask: true,
-            isAutoSkill: true,
-            taskContext: result.context
-          }
-        }
-
-        if (result.status === 'failed') {
-          return {
-            success: false,
-            error: result.error || '技能执行失败',
-            isTask: true,
-            isAutoSkill: true
-          }
-        }
-      } catch (error) {
-        console.error('[Main] 自动执行技能失败:', error)
-        return {
-          success: false,
-          error: error.message || '技能执行失败',
-          isAutoSkill: true
-        }
-      }
-    }
-  }
-
-    // ========== 普通 AI 调用 ==========
+  // ========== 普通 AI 调用 ==========
   try {
-    const { fullQuestion, webSearched, cacheType, contextMode, contextSize } = await buildChatContext({ userInput, skillPrompt, scriptTemplate, activeSkillId, skillEditMode, sessionId })
-    const content = await callAIWithCache(fullQuestion, { empId, sessionId, userInput, skillPrompt, cacheType, source: 'chat', contextMode, contextSize })
+    const { fullQuestion, webSearched, cacheType, contextMode, contextSize } = await buildChatContext({ userInput, scriptTemplate, sessionId })
+    const content = await callAIWithCache(fullQuestion, { empId, sessionId, userInput, cacheType, source: 'chat', contextMode, contextSize })
 
     if (!content) {
       throw new Error('AI 返回内容为空')
@@ -418,7 +308,6 @@ async function handleChat({ userInput, empId, sessionId, skillPrompt, scriptTemp
           sessionId: sessionId || getMuseSessionId(),
           memories: museContext?.memories || '',
           profile: museContext?.profile || '',
-          skills: museContext?.skills || '',
         }
         await executeReActWithIPC(museTask, museTask, context, {
           source: 'muse_task',
@@ -457,10 +346,7 @@ async function handleChat({ userInput, empId, sessionId, skillPrompt, scriptTemp
           userInput,
           empId,
           sessionId,
-          skillPrompt,
           scriptTemplate,
-          activeSkillId,
-          skillEditMode,
           contextMode,
           contextSize,
           webSearched
@@ -490,13 +376,13 @@ async function handleChat({ userInput, empId, sessionId, skillPrompt, scriptTemp
  * 流式对话处理函数
  */
 async function handleChatStream(params) {
-  let { userInput, empId, sessionId, skillPrompt, scriptTemplate, activeSkillId, skillEditMode, images } = params
+  let { userInput, empId, sessionId, scriptTemplate, images } = params
 
   // 交互式对话抢占后台学习图谱预生成，避免用户排在章节生成后面等待
   try { abortCallsByLabel('prefetch') } catch (_) {}
 
   // ========== 插件钩子：onUserMessage ==========
-  // 插件可在用户输入到达技能匹配前修改或增强输入
+  // 插件可在用户输入到达处理前修改或增强输入
   try {
     const pluginSystem = require('./plugin-system')
     const modifiedInput = await pluginSystem.runHooks('onUserMessage', userInput)
@@ -506,122 +392,16 @@ async function handleChatStream(params) {
     }
   } catch (_) { /* 插件系统未加载时忽略 */ }
 
-  console.log(`[Main][handleChatStream] 走流式路径: ${userInput?.substring(0, 50)}${skillPrompt ? ' | 有技能' : ''}${activeSkillId ? ` | skill:${activeSkillId}` : ''}${skillEditMode ? ` | 编辑模式:${skillEditMode.name}` : ''}${scriptTemplate ? ` | 脚本模板:${scriptTemplate.lang}` : ''}`)
+  console.log(`[Main][handleChatStream] 走流式路径: ${userInput?.substring(0, 50)}${scriptTemplate ? ` | 脚本模板:${scriptTemplate.lang}` : ''}`)
   if (scriptTemplate) {
     console.log('[Main][handleChatStream] ⚠️ 有 scriptTemplate → 将走脚本模板分支')
-  }
-  if (activeSkillId && !skillPrompt && !scriptTemplate && !skillEditMode) {
-    console.log('[Main][handleChatStream] activeSkillId 存在且无其他覆盖 → 将从目录加载技能')
-  }
-
-  // ── 贴图注入（路径1）：已有 activeSkillId 时（手动选技能+贴图），trigger 匹配前注入 ──
-  if (images && images.length > 0 && activeSkillId && !skillEditMode) {
-    try {
-      const os = require('os')
-      const savedPaths = []
-      for (const img of images) {
-        if (!img.dataUrl) continue
-        const base64Data = img.dataUrl.replace(/^data:[^;]+;base64,/, '')
-        const ext = img.mimeType?.includes('png') ? 'png' : img.mimeType?.includes('webp') ? 'webp' : 'jpg'
-        const tmpFile = path.join(os.tmpdir(), `skill_img_${Date.now()}_${savedPaths.length}.${ext}`)
-        fs.writeFileSync(tmpFile, Buffer.from(base64Data, 'base64'))
-        savedPaths.push(tmpFile)
-        console.log('[Main][handleChatStream] 图片已保存为临时文件:', tmpFile)
-      }
-      if (savedPaths.length > 0) {
-        userInput = `${userInput}\n[用户贴图路径]: ${savedPaths.join(', ')}`
-        console.log('[Main][handleChatStream] 图片路径已注入 userInput (activeSkillId 路径):', userInput.slice(-80))
-      }
-    } catch (imgErr) {
-      console.warn('[Main][handleChatStream] 图片保存失败:', imgErr.message)
-    }
-  }
-
-  // ========== Schema triggers 自动匹配 ==========
-  // 如果没有激活技能，检查用户输入是否匹配某个技能的 triggers
-  if (!activeSkillId && !skillPrompt && !scriptTemplate && !skillEditMode) {
-    try {
-      const { findBestTriggerMatch, resolveInputs, buildAskMessage } = require('./skill-schema')
-      const allSkills = Skills.getAll()
-      // 用原始 userInput 做 trigger 匹配，避免贴图注入影响评分
-      const triggerResult = findBestTriggerMatch(userInput, allSkills)
-
-      if (triggerResult.skill) {
-        console.log('[Main][handleChatStream] Triggers 自动匹配到技能:', triggerResult.skill.name, '触发词:', triggerResult.trigger, '得分:', triggerResult.score.toFixed(2))
-        activeSkillId = triggerResult.skill.id
-
-        // ── 贴图注入（路径2）：trigger 匹配成功后再注入，供 resolveInputs 提取参数 ──
-        if (images && images.length > 0) {
-          try {
-            const os = require('os')
-            const savedPaths = []
-            for (const img of images) {
-              if (!img.dataUrl) continue
-              const base64Data = img.dataUrl.replace(/^data:[^;]+;base64,/, '')
-              const ext = img.mimeType?.includes('png') ? 'png' : img.mimeType?.includes('webp') ? 'webp' : 'jpg'
-              const tmpFile = path.join(os.tmpdir(), `skill_img_${Date.now()}_${savedPaths.length}.${ext}`)
-              fs.writeFileSync(tmpFile, Buffer.from(base64Data, 'base64'))
-              savedPaths.push(tmpFile)
-              console.log('[Main][handleChatStream] 图片已保存为临时文件:', tmpFile)
-            }
-            if (savedPaths.length > 0) {
-              userInput = `${userInput}\n[用户贴图路径]: ${savedPaths.join(', ')}`
-              console.log('[Main][handleChatStream] 图片路径已注入 userInput (trigger 路径):', userInput.slice(-80))
-            }
-          } catch (imgErr) {
-            console.warn('[Main][handleChatStream] 图片保存失败:', imgErr.message)
-          }
-        }
-
-        // 检查 Schema inputs 参数是否齐全
-        if (triggerResult.skill.inputs) {
-          const { resolved, missing } = resolveInputs(userInput, triggerResult.skill.inputs)
-          if (missing.length > 0) {
-            // 缺少必要参数 → 自动追问
-            const askMsg = buildAskMessage(missing)
-            const win = getWindow()
-            if (win) {
-              win.webContents.send('ai:streamEnd', {
-                success: true,
-                content: `🎯 已匹配技能「**${triggerResult.skill.name}**」（触发词: ${triggerResult.trigger}）\n\n${askMsg}`,
-                webSearched: false,
-                autoMatchedSkill: triggerResult.skill.id
-              })
-            }
-            return
-          }
-          console.log('[Main][handleChatStream] Schema 参数已齐全:', resolved)
-        }
-
-        // 通知前端技能已自动激活
-        const win = getWindow()
-        if (win) {
-          win.webContents.send('skill:autoActivated', {
-            skillId: triggerResult.skill.id,
-            skillName: triggerResult.skill.name,
-            trigger: triggerResult.trigger
-          })
-        }
-      }
-    } catch (triggerErr) {
-      console.warn('[Main][handleChatStream] Triggers 匹配异常:', triggerErr.message)
-    }
   }
 
   // ========== 特殊命令回退到非流式处理 ==========
   const trimmedInput = userInput.trim()
 
   const needNonStream =
-    trimmedInput === '/self-check' || trimmedInput.startsWith('/self-check') ||
-    (activeSkillId && (() => {
-      try {
-        // 直接用 loadFromDir 解析好的 autoExecute 字段，
-        // 不要在 content（正文）里用正则找，因为 autoExecute 在 frontmatter 里
-        const activeSkill = Skills.loadFromDir(activeSkillId)
-        return !!(activeSkill?.autoExecute && activeSkill?.steps?.length > 0)
-      } catch (e) {}
-      return false
-    })())
+    trimmedInput === '/self-check' || trimmedInput.startsWith('/self-check')
 
   if (needNonStream) {
     try {
@@ -663,7 +443,7 @@ async function handleChatStream(params) {
 
     const contextStartTime = Date.now()
     const { fullQuestion: baseQuestion, webSearched, contextMode, contextSize, images: contextImages, matchedTemplateNames } = await buildChatContext({
-      userInput, skillPrompt, scriptTemplate, activeSkillId, skillEditMode, sessionId, images
+      userInput, scriptTemplate, sessionId, images
     })
     console.log(`[Main][Perf] buildChatContext 耗时: ${Date.now() - contextStartTime}ms`)
 
@@ -760,7 +540,6 @@ async function handleChatStream(params) {
             sessionId: sessionId || getMuseSessionId(),
             memories: museContext?.memories || '',
             profile: museContext?.profile || '',
-            skills: museContext?.skills || '',
           }
           await executeReActWithIPC(museTask, museTask, context, {
             source: 'muse_task_stream',
@@ -795,32 +574,7 @@ async function handleChatStream(params) {
       // 流式路径 SCRIPT_BLOCK
       if (result.isScript) {
         try {
-          // 技能模式下自动执行（Agent Loop），模拟 Claude Code 行为
-          if (activeSkillId) {
-            const scriptInfo = JSON.parse(result.content)
-            console.log('[Main][Stream] 技能模式 SCRIPT_BLOCK 自动执行:', scriptInfo.description)
-
-            const autoExecResult = await handleScriptAutoExecution({
-              scriptInfo, userInput, empId, sessionId,
-              skillPrompt: params.skillPrompt, scriptTemplate, activeSkillId, skillEditMode,
-              contextMode, contextSize, webSearched,
-              isSkillMode: true
-            })
-
-            if (autoExecResult) {
-              const w = getWindow()
-              if (w) {
-                w.webContents.send('ai:streamEnd', {
-                  ...autoExecResult,
-                  contextMode,
-                  contextSize
-                })
-              }
-            }
-            return
-          }
-
-          // 非技能模式：发送 ai:streamEnd 让前端创建 script 消息卡片，显示手动执行按钮
+          // 发送 ai:streamEnd 让前端创建 script 消息卡片，显示手动执行按钮
           const w = getWindow()
           if (w) {
             w.webContents.send('ai:streamEnd', {
@@ -867,11 +621,6 @@ async function handleChatStream(params) {
       // ========== 上下文标签信息（供前端 ContextChipStrip 渲染） ==========
       if (result.success) {
         const contextChips = []
-        // 激活的技能
-        if (activeSkillId && params.skillPrompt) {
-          const skillName = activeSkillId
-          contextChips.push({ id: `skill:${activeSkillId}`, type: 'skill', label: skillName })
-        }
         // 匹配的场景模板
         if (matchedTemplateNames && matchedTemplateNames.length > 0) {
           for (const name of matchedTemplateNames) {
@@ -963,9 +712,8 @@ const SCRIPT_MAX_RETRIES = 2  // 错误自动重试最大次数
 async function handleScriptAutoExecution(options) {
   const {
     scriptInfo, userInput, empId, sessionId,
-    skillPrompt, scriptTemplate, activeSkillId, skillEditMode,
-    contextMode, contextSize, webSearched,
-    isSkillMode = true
+    scriptTemplate,
+    contextMode, contextSize, webSearched
   } = options
 
   const { ipcMain } = require('electron')
@@ -979,29 +727,15 @@ async function handleScriptAutoExecution(options) {
     contentLength: scriptContent?.length
   })
 
-  // 确定工作目录：技能编辑模式目录 > 激活技能目录 > 工作区 > 脚本所在目录
-  const scriptCwd = resolveScriptCwd(activeSkillId, scriptFile, skillEditMode)
+  // 确定工作目录：工作区 > 脚本所在目录
+  const scriptCwd = resolveScriptCwd(scriptFile)
 
-  // ========== Schema 增强：读取技能的 dangerous/sideEffects/rollback/onError ==========
-  let skillSchema = null
-  if (activeSkillId) {
-    skillSchema = Skills.loadFromDir(activeSkillId)
-  }
-  const schemaDangerous = skillSchema?.dangerous === true
-  const schemaRollback = skillSchema?.rollback || null
-  const schemaOnError = skillSchema?.onError || null
-  const schemaSideEffects = skillSchema?.sideEffects || null
-
-  // ========== 第 1 步：双层安全检查（Schema dangerous 叠加） ==========
-  const effectiveDangerous = isDangerous || schemaDangerous
-  const effectiveDangerReason = dangerReason || (schemaDangerous ? `技能 Schema 标记为危险操作${schemaSideEffects ? '，副作用: ' + schemaSideEffects.join(', ') : ''}` : '')
-  const safety = analyzeScriptSafety(scriptContent, lang, effectiveDangerous, effectiveDangerReason)
+  // ========== 第 1 步：双层安全检查 ==========
+  const safety = analyzeScriptSafety(scriptContent, lang, isDangerous, dangerReason || '')
   console.log('[ScriptAutoExec] 安全分析结果:', {
     needsAuth: safety.needsAuth,
     riskLevel: safety.riskLevel,
-    reason: safety.reason,
-    schemaDangerous,
-    schemaRollback: !!schemaRollback
+    reason: safety.reason
   })
 
   // ========== 第 2 步：危险脚本等待用户授权 ==========
@@ -1027,39 +761,19 @@ async function handleScriptAutoExecution(options) {
     console.log('[ScriptAutoExec] 用户已授权执行危险脚本')
   }
 
-  // ========== 第 3 步：子进程执行（含错误重试 + Schema onError 策略） ==========
+  // ========== 第 3 步：子进程执行（含错误重试） ==========
   return await executeWithRetry({
     scriptInfo, scriptCwd, userInput, empId, sessionId,
-    skillPrompt, scriptTemplate, activeSkillId, skillEditMode,
-    contextMode, contextSize, webSearched, win,
-    schemaOnError, schemaRollback,
-    isSkillMode
+    scriptTemplate,
+    contextMode, contextSize, webSearched, win
   })
 }
 
 /**
  * 解析脚本执行的工作目录
- * 优先级：技能编辑模式目录 > 激活技能目录 > 工作区 > 脚本所在目录
+ * 优先级：工作区 > 脚本所在目录
  */
-function resolveScriptCwd(activeSkillId, scriptFile, skillEditMode) {
-  // 技能编辑模式：使用正在编辑的技能目录
-  if (skillEditMode && skillEditMode.id) {
-    const editSkillDir = path.join(process.env.HOME, '.ai-terminal', 'skills', skillEditMode.id)
-    if (fs.existsSync(editSkillDir)) {
-      console.log('[ScriptAutoExec] 使用技能编辑模式目录作为 cwd:', editSkillDir)
-      return editSkillDir
-    }
-  }
-
-  // 如果有激活的技能，使用技能目录作为 cwd
-  if (activeSkillId) {
-    const skillDir = path.join(process.env.HOME, '.ai-terminal', 'skills', activeSkillId)
-    if (fs.existsSync(skillDir)) {
-      console.log('[ScriptAutoExec] 使用技能目录作为 cwd:', skillDir)
-      return skillDir
-    }
-  }
-
+function resolveScriptCwd(scriptFile) {
   // 回退到工作区目录
   const workspacePath = getWorkspacePath()
   if (workspacePath && workspacePath !== process.env.HOME) {
@@ -1114,19 +828,13 @@ function requestUserAuth(win, authData) {
 async function executeWithRetry(options) {
   const {
     scriptInfo, scriptCwd, userInput, empId, sessionId,
-    skillPrompt, scriptTemplate, activeSkillId, skillEditMode,
+    scriptTemplate,
     contextMode, contextSize, webSearched, win,
-    followUpDepth = 0,
-    schemaOnError = null, schemaRollback = null,
-    isSkillMode = true
+    followUpDepth = 0
   } = options
 
-  // 解析 Schema onError 策略（覆盖默认重试次数）
-  const { parseOnErrorStrategy } = require('./skill-schema')
-  const errorStrategy = parseOnErrorStrategy(schemaOnError)
-  const effectiveMaxRetries = errorStrategy.strategy === 'abort' ? 0
-    : errorStrategy.strategy === 'retry' ? errorStrategy.maxRetries
-    : SCRIPT_MAX_RETRIES
+  // 重试次数上限
+  const effectiveMaxRetries = SCRIPT_MAX_RETRIES
 
   let currentScriptInfo = scriptInfo
   let retryCount = 0
@@ -1223,23 +931,11 @@ async function executeWithRetry(options) {
         }
       }
 
-      // 非技能模式下跳过 followUp 分析（简单脚本不需要 AI 二次决策）
-      if (!isSkillMode) {
-        return {
-          success: true,
-          content: JSON.stringify(completedScriptInfo),
-          webSearched,
-          isScript: true,
-          contextMode,
-          contextSize
-        }
-      }
-
       const followUpResult = await triggerFollowUp({
         scriptId: filename,
         description, stdout: execResult.stdout, exitCode: execResult.exitCode,
         userInput, empId, sessionId,
-        skillPrompt, scriptTemplate, activeSkillId, skillEditMode,
+        scriptTemplate,
         contextMode, contextSize, webSearched, win,
         depth: followUpDepth,
         scriptCwd
@@ -1288,10 +984,9 @@ async function executeWithRetry(options) {
       willRetry: retryCount < SCRIPT_MAX_RETRIES
     })
 
-    // 达到最大重试次数 或 onError 策略为 abort → 返回失败结果
-    if (retryCount >= effectiveMaxRetries || errorStrategy.strategy === 'abort') {
-      const reason = errorStrategy.strategy === 'abort' ? 'Schema onError=abort，不重试' : '达到最大重试次数'
-      console.log(`[ScriptAutoExec] ${reason}，返回失败结果`)
+    // 达到最大重试次数 → 返回失败结果
+    if (retryCount >= effectiveMaxRetries) {
+      console.log('[ScriptAutoExec] 达到最大重试次数，返回失败结果')
 
       // 将失败结果也注入到下一轮 AI 对话上下文中
       addScriptExecResult({
@@ -1305,7 +1000,7 @@ async function executeWithRetry(options) {
         error: execResult.error
       })
 
-      // 构建失败结果（含 rollback 信息）
+      // 构建失败结果
       const failedResult = {
         type: 'script',
         ...currentScriptInfo,
@@ -1316,13 +1011,6 @@ async function executeWithRetry(options) {
           exitCode: execResult.exitCode,
           error: execResult.error
         }
-      }
-
-      // Schema rollback 支持：在失败结果中附带回滚命令
-      if (schemaRollback) {
-        failedResult.rollbackCommand = schemaRollback
-        failedResult.rollbackHint = `⚠️ 执行失败，可使用回滚命令恢复: \`${schemaRollback}\``
-        console.log('[ScriptAutoExec] 附带 Schema rollback 命令:', schemaRollback)
       }
 
       return {
@@ -1350,11 +1038,11 @@ async function executeWithRetry(options) {
     try {
       const { fullQuestion: retryQuestion } = await buildChatContext({
         userInput: retryPrompt,
-        skillPrompt, scriptTemplate, activeSkillId, skillEditMode, sessionId
+        scriptTemplate, sessionId
       })
 
       const retryContent = await callAIWithCache(retryQuestion, {
-        empId, sessionId, userInput: retryPrompt, skillPrompt,
+        empId, sessionId, userInput: retryPrompt,
         source: 'script_retry', contextMode, contextSize
       })
 
@@ -1399,7 +1087,7 @@ async function triggerFollowUp(options) {
     scriptId,
     description, stdout, exitCode,
     userInput, empId, sessionId,
-    skillPrompt, scriptTemplate, activeSkillId, skillEditMode,
+    scriptTemplate,
     contextMode, contextSize, webSearched, win,
     depth = 0,
     scriptCwd
@@ -1443,11 +1131,11 @@ ${envSnapshot ? `\n【当前环境状态】\n${envSnapshot}` : ''}
 
     const { fullQuestion } = await buildChatContext({
       userInput: followUpInput,
-      skillPrompt, scriptTemplate, activeSkillId, skillEditMode, sessionId
+      scriptTemplate, sessionId
     })
 
     const content = await callAIWithCache(fullQuestion, {
-      empId, sessionId, userInput: followUpInput, skillPrompt,
+      empId, sessionId, userInput: followUpInput,
       source: 'script_followup', contextMode, contextSize
     })
 
@@ -1467,7 +1155,7 @@ ${envSnapshot ? `\n【当前环境状态】\n${envSnapshot}` : ''}
         console.log('[ScriptAutoExec] AI 返回了后续脚本:', nextScriptInfo.description)
         console.log('[ScriptAutoExec] 脚本内容:', nextScriptInfo.scriptContent?.substring(0, 200))
 
-        const scriptCwd = resolveScriptCwd(activeSkillId, nextScriptInfo.scriptFile, skillEditMode)
+        const scriptCwd = resolveScriptCwd(nextScriptInfo.scriptFile)
         const safety = analyzeScriptSafety(nextScriptInfo.scriptContent, nextScriptInfo.lang, nextScriptInfo.isDangerous, nextScriptInfo.dangerReason)
 
         console.log('[ScriptAutoExec] 脚本安全分析:', safety)
@@ -1524,7 +1212,7 @@ ${envSnapshot ? `\n【当前环境状态】\n${envSnapshot}` : ''}
           scriptInfo: nextScriptInfo,
           scriptCwd,
           userInput, empId, sessionId,
-          skillPrompt, scriptTemplate, activeSkillId, skillEditMode,
+          scriptTemplate,
           contextMode, contextSize, webSearched, win,
           followUpDepth: depth + 1
         })
@@ -1588,7 +1276,7 @@ ${envSnapshot ? `\n【当前环境状态】\n${envSnapshot}` : ''}
         stdout: `浏览器已在右侧面板打开页面: ${targetUrl}`,
         exitCode: 0,
         userInput, empId, sessionId,
-        skillPrompt, scriptTemplate, activeSkillId, skillEditMode,
+        scriptTemplate,
         contextMode, contextSize, webSearched, win,
         depth: depth + 1,
         scriptCwd

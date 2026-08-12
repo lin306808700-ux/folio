@@ -4,14 +4,14 @@
  * 插件系统管理器
  *
  * 职责：
- * 1. 扫描 ~/.ai-terminal/plugins/ 目录加载插件
+ * 1. 扫描 ~/.folio/plugins/ 目录加载插件
  * 2. 管理插件生命周期（load/unload/enable/disable）
  * 3. 提供工具注册表供 ReAct 引擎调用
  * 4. 管理钩子链（before/after hooks）
  * 5. 管理上下文注入器
  *
  * 插件目录结构：
- *   ~/.ai-terminal/plugins/
+ *   ~/.folio/plugins/
  *     ├── my-plugin/
  *     │   ├── plugin.js          (或 index.js)
  *     │   ├── package.json       (可选，元数据)
@@ -20,7 +20,7 @@
  *         └── ...
  *
  * 插件状态文件：
- *   ~/.ai-terminal/plugins/.plugin-state.json
+ *   ~/.folio/plugins/.plugin-state.json
  *   记录每个插件的 enabled/disabled 状态
  */
 
@@ -29,7 +29,7 @@ const path = require('path')
 const os = require('os')
 const { validatePlugin, summarizePlugin } = require('./plugin-interface')
 
-const PLUGINS_DIR = path.join(os.homedir(), '.ai-terminal', 'plugins')
+const PLUGINS_DIR = path.join(os.homedir(), '.folio', 'plugins')
 const STATE_FILE = path.join(PLUGINS_DIR, '.plugin-state.json')
 
 // 插件注册表
@@ -461,10 +461,6 @@ async function runHooks(hookName, ...args) {
 
     try {
       const hookResult = await plugin.hooks[hookName](...args)
-      // beforeSkillExecute 返回 false 可阻止执行
-      if (hookName === 'beforeSkillExecute' && hookResult === false) {
-        return false
-      }
       // 更新结果（如果有返回值）
       if (hookResult !== undefined && hookResult !== null) {
         result = hookResult

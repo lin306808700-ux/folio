@@ -10,14 +10,8 @@ const { proactiveExplore } = require('./explore')
 const { archiveOldTasks } = require('./archive')
 const { callAI } = require('../../shared/ai-client')
 const { Letters } = require('../database')
-const { findBestTriggerMatch } = require('../skill-schema')
-const { recordSkillUsage } = require('./skill-creator')
 const { getActiveGoals, getNextExploreStep, completeExploreStep, areAllStepsCompleted, completeGoal, addExploreStep, getById } = require('./goals')
 const { consolidateMemories, runDecay } = require('./knowledge')
-
-let _lastMatchedSkillId = null
-let _lastMatchedTime = 0
-const SKILL_MATCH_COOLDOWN = 5 * 60 * 1000
 
 let _heartbeatTimer = null
 let _heartbeatCount = 0
@@ -463,37 +457,6 @@ async function heartbeat() {
       else if (failedSubtasks.length > 0) {
         console.log('[Muse] ⚠️ 父任务有失败的子任务:', suspendedTask.id)
       }
-    }
-
-    // 检查最近对话是否匹配技能触发词
-    try {
-      const { Skills } = require('../database')
-      const allSkills = Skills.getAll().filter(s => s.triggers && s.triggers.length > 0)
-      const triggerContext = gatherOwnerContext()
-      const recentInput = (triggerContext.recentHistory || '').split('---')[0] || ''
-      if (recentInput && allSkills.length > 0) {
-        const matchResult = findBestTriggerMatch(recentInput, allSkills)
-        if (matchResult.skill) {
-          const matchedId = matchResult.skill.id
-          const now = Date.now()
-          const isCooldown = matchedId === _lastMatchedSkillId && (now - _lastMatchedTime) < SKILL_MATCH_COOLDOWN
-          if (!isCooldown) {
-            _lastMatchedSkillId = matchedId
-            _lastMatchedTime = now
-            console.log('[Muse] 触发词匹配到技能:', matchResult.skill.name)
-            recordSkillUsage(matchedId, true)
-            sendLetter({
-              title: '🎯 检测到匹配技能：' + matchResult.skill.name,
-              content: '主人，根据您最近的操作，技能 **' + matchResult.skill.name + '** 可能正好派上用场。触发词：' + matchResult.trigger,
-              priority: 'normal',
-              source: 'skill-match'
-            })
-            return
-          }
-        }
-      }
-    } catch (skillMatchErr) {
-      console.warn('[Muse] 技能触发匹配失败:', skillMatchErr.message)
     }
 
         // 没有待办任务，先尝试 syslog 分析（每天最多一次）

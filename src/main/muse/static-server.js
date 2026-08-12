@@ -9,7 +9,7 @@ const express = require('express')
 const path = require('path')
 const fs = require('fs')
 
-const MUSE_HOME = path.join(process.env.HOME, '.ai-terminal/muse')
+const MUSE_HOME = path.join(process.env.HOME, '.folio/muse')
 const WORKSPACE_DIR = path.join(MUSE_HOME, 'workspace')
 
 const app = express()

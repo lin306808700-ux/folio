@@ -1,13 +1,13 @@
 /**
  * 任务执行引擎（精简版）
- * 保留 Executor + StateManager，供 self-check 和技能自动执行使用
+ * 保留 Executor + StateManager，供 self-check 使用
  * 规划和浏览器路由已迁移到 muse/router.js
  */
 
 const executor = require('./executor');
 const stateManager = require('./state');
 const toolRegistry = require('./tools');
-const { Memories, Skills } = require('../database');
+const { Memories } = require('../database');
 
 class TaskEngine {
   constructor() {
@@ -18,11 +18,6 @@ class TaskEngine {
     const memoryTool = this.toolRegistry.get('memory');
     if (memoryTool && Memories) {
       memoryTool.setDatabase(Memories);
-    }
-    
-    const skillTool = this.toolRegistry.get('skill');
-    if (skillTool && Skills) {
-      skillTool.setDatabase(Skills);
     }
   }
 

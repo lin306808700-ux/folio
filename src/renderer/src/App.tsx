@@ -10,7 +10,7 @@ import FloatingNav from './components/FloatingNav';
 import GlobalAmbient from './components/GlobalAmbient';
 import HistoryPage from './pages/HistoryPage';
 import LearningMapPage from './pages/LearningMapPage';
-// 功能减法：技能/变更分析/信箱/作品/爬虫/伴侣演示入口已隐藏，页面文件保留待后续恢复
+// 功能减法：变更分析/信箱/作品/爬虫/伴侣演示入口已隐藏，页面文件保留待后续恢复
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { baseUrl, getAuthHeaders, isElectron } from './utils/config';

@@ -1,18 +1,9 @@
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Send, Loader2, Zap, X, LayoutGrid, Pencil, ImageIcon, Camera, Paperclip, Mic, Quote } from 'lucide-react'
-import { SkillEditModal } from './SkillEditModal'
+import { Send, X, ImageIcon, Quote } from 'lucide-react'
 import { emitMuseInteraction } from '../../muse-interaction-bus'
 import type { ImageAttachment, ChatRequestEnvelope } from '../types'
 import { detectTrigger, TriggerType } from '../hooks/useTriggerSearch'
-
-interface SkillEditModeType {
-  id: string
-  name: string
-  content: string
-  description?: string
-  isNew?: boolean
-}
 
 interface ChatInputProps {
   input: string
@@ -20,19 +11,8 @@ interface ChatInputProps {
   onSend: () => void
   onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
   loading: boolean
-  selectedSkill: any
-  onClearSkill: () => void
-  skills: any[]
-  showSkillMenu: boolean
-  onToggleSkillMenu: () => void
-  onSelectSkill: (skill: any) => void
-  skillMenuRef: React.RefObject<HTMLDivElement>
   isElectron: boolean
   textareaRef: React.RefObject<HTMLTextAreaElement>
-  onUpdateSkill: (id: string, data: any) => Promise<void>
-  refreshSkills: () => void
-  skillEditMode?: SkillEditModeType | null
-  setSkillEditMode?: (mode: SkillEditModeType | null) => void
   onClearMessages?: () => void
   onSlashInput?: (value: string | null) => void
   onTriggerInput?: (data: { trigger: TriggerType; filter: string } | null) => void
@@ -52,19 +32,8 @@ export function ChatInput({
   onSend,
   onKeyDown,
   loading,
-  selectedSkill,
-  onClearSkill,
-  skills,
-  showSkillMenu,
-  onToggleSkillMenu,
-  onSelectSkill,
-  skillMenuRef,
   isElectron,
   textareaRef,
-  onUpdateSkill,
-  refreshSkills,
-  skillEditMode,
-  setSkillEditMode,
   onClearMessages,
   onSlashInput,
   onTriggerInput,
@@ -77,7 +46,6 @@ export function ChatInput({
   queuedCount = 0,
   onCancelQueuedRequest
 }: ChatInputProps) {
-  const [editingSkill, setEditingSkill] = useState<any>(null)
   // 发送瞬间从按钮迸发的紫色涟漪，呼应海洋场的上行涟漪
   const [sendRipple, setSendRipple] = useState<number | null>(null)
 
@@ -126,91 +94,9 @@ export function ChatInput({
   return (
     <div className="p-4">
       {/* 快捷操作栏 */}
-      <div className="flex items-center gap-1 px-3 mb-2">
-        {isElectron && (
-          <button
-            onClick={async () => {
-              const result = await (window as any).electronAPI?.screenshot?.capture?.()
-              if (result?.dataUrl && onImagesChange) {
-                onImagesChange([...attachedImages, { dataUrl: result.dataUrl, mimeType: 'image/png', name: 'screenshot.png' }])
-              }
-            }}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-text-faint hover:text-brand hover:bg-text-primary/[0.06] rounded-lg transition-colors"
-            title="截图"
-          >
-            <Camera size={13} />
-            <span>截图</span>
-          </button>
-        )}
-        <label
-          className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-text-faint hover:text-brand hover:bg-text-primary/[0.06] rounded-lg transition-colors cursor-pointer"
-          title="添加文件"
-        >
-          <Paperclip size={13} />
-          <span>文件</span>
-          <input
-            type="file"
-            className="hidden"
-            accept="image/*,.txt,.md,.json,.js,.ts,.tsx,.py,.java,.go,.rs"
-            multiple
-            onChange={async (e) => {
-              const files = Array.from(e.target.files || [])
-              const imageFiles = files.filter(f => f.type.startsWith('image/'))
-              const textFiles = files.filter(f => !f.type.startsWith('image/'))
-              if (imageFiles.length > 0 && onImagesChange) {
-                const newImages: ImageAttachment[] = []
-                for (const file of imageFiles) {
-                  const attachment = await readFileAsDataUrl(file)
-                  newImages.push(attachment)
-                }
-                onImagesChange([...attachedImages, ...newImages])
-              }
-              if (textFiles.length > 0) {
-                const fileRefs = textFiles.map(f => `@${f.name}`).join(' ')
-                onInputChange(input + (input ? ' ' : '') + fileRefs)
-              }
-              e.target.value = ''
-            }}
-          />
-        </label>
-        {isElectron && (
-          <button
-            onClick={async () => {
-              const voiceApi = (window as any).electronAPI?.voice
-              if (voiceApi?.toggle) {
-                await voiceApi.toggle()
-              } else {
-                onInputChange(input + (input ? ' ' : '') + '[语音输入功能需在系统设置中开启麦克风权限]')
-              }
-            }}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] text-text-faint hover:text-brand hover:bg-text-primary/[0.06] rounded-lg transition-colors"
-            title="语音输入"
-          >
-            <Mic size={13} />
-            <span>语音</span>
-          </button>
-        )}
-        <div className="flex-1" />
+      <div className="flex items-center justify-end gap-1 px-3 mb-2">
         <span className="text-[10px] text-text-faint/70">⌘+Enter 发送 · @ 引用文件 · / 命令</span>
       </div>
-
-      {/* 技能选中提示 */}
-      {selectedSkill && (
-        <div className="flex items-center gap-2 mb-2 px-4">
-          <div className="flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-full bg-violet-500/15 text-violet-300 border border-violet-400/20">
-            <Zap size={10} />
-            {selectedSkill.name}
-            <button
-              onClick={() => setEditingSkill(selectedSkill)}
-              className="ml-1 hover:text-violet-100"
-              title="编辑技能"
-            >
-              <Pencil size={10} />
-            </button>
-            <button onClick={onClearSkill} className="ml-0.5 hover:text-violet-100"><X size={10} /></button>
-          </div>
-        </div>
-      )}
 
       {/* 图片预览区 */}
       <AnimatePresence initial={false}>
@@ -289,31 +175,14 @@ export function ChatInput({
             <span className="chat-input-thinking-sheen absolute inset-0" />
           </span>
         )}
-        {/* 技能下拉按钮 */}
-        {isElectron && skills.length > 0 && (
-          <div className="relative self-end mb-1 ml-1" ref={skillMenuRef}>
-            <button
-              onClick={onToggleSkillMenu}
-              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${
-                selectedSkill ? 'bg-brand/20 text-brand' : 'text-text-faint hover:text-text-secondary hover:bg-text-primary/[0.06]'
-              }`}
-              title="选择技能"
-            >
-              <LayoutGrid size={18} />
-            </button>
-          </div>
-        )}
-
         {/* 多行输入框 */}
         <textarea
           ref={textareaRef}
           className="flex-1 px-5 py-3 bg-transparent outline-none font-medium text-text-primary placeholder-text-faint resize-none leading-relaxed"
           placeholder={
-            skillEditMode
-              ? (skillEditMode.isNew ? '描述你想创建的新技能...' : `说说你想怎么完善「${skillEditMode.name}」...`)
-              : quotePreview
-                ? '针对引用内容继续提问...'
-                : (selectedSkill ? `以「${selectedSkill.name}」身份处理...` : '⚡ 描述你的需求或问题... (支持 @ # / 快速检索)')
+            quotePreview
+              ? '针对引用内容继续提问...'
+              : '⚡ 描述你的需求或问题... (支持 @ # / 快速检索)'
           }
           value={input}
           onChange={e => {
@@ -398,20 +267,6 @@ export function ChatInput({
           </motion.button>
         </div>
       </div>
-
-      {/* 技能编辑弹窗 */}
-      {editingSkill && (
-        <SkillEditModal
-          mode="edit"
-          skill={editingSkill}
-          onClose={() => setEditingSkill(null)}
-          onSave={async (skillData) => {
-            await onUpdateSkill(editingSkill.id, skillData)
-            setEditingSkill(null)
-            refreshSkills()
-          }}
-        />
-      )}
     </div>
   )
 }

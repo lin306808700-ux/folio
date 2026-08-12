@@ -1,11 +1,11 @@
-# Muse AI-Terminal 插件开发指南
+# Muse Folio 插件开发指南
 
 ## 概述
 
-Muse AI-Terminal 插件系统允许社区开发者为 Muse Agent 扩展三种核心能力：
+Muse Folio 插件系统允许社区开发者为 Muse Agent 扩展三种核心能力：
 
 1. **工具（Tools）**：注册自定义工具，供 ReAct 引擎作为可调用的 action
-2. **钩子（Hooks）**：在技能执行前/后、用户消息处理时注入逻辑
+2. **钩子（Hooks）**：在用户消息处理、上下文构建时注入逻辑
 3. **上下文注入器（Context Provider）**：向 AI prompt 动态注入额外上下文
 
 ## 快速开始
@@ -13,12 +13,12 @@ Muse AI-Terminal 插件系统允许社区开发者为 Muse Agent 扩展三种核
 ### 1. 创建插件目录
 
 ```bash
-mkdir -p ~/.ai-terminal/plugins/my-plugin
+mkdir -p ~/.folio/plugins/my-plugin
 ```
 
 ### 2. 创建插件入口文件
 
-在 `~/.ai-terminal/plugins/my-plugin/plugin.js` 中编写：
+在 `~/.folio/plugins/my-plugin/plugin.js` 中编写：
 
 ```javascript
 'use strict'
@@ -52,7 +52,7 @@ module.exports = {
 
 ### 3. 自动加载
 
-插件系统在应用启动时自动扫描 `~/.ai-terminal/plugins/` 目录。修改插件后可通过 IPC 调用 `plugins:reload` 热重载。
+插件系统在应用启动时自动扫描 `~/.folio/plugins/` 目录。修改插件后可通过 IPC 调用 `plugins:reload` 热重载。
 
 ## 插件接口规范
 
@@ -110,44 +110,9 @@ tools: {
 
 ## 钩子（Hooks）
 
-### beforeSkillExecute
-
-在技能执行前调用。返回 `false` 可阻止执行。
-
-```javascript
-hooks: {
-  async beforeSkillExecute(skill, params) {
-    // skill: 被激活的技能对象
-    // params: 参数对象（可修改）
-    console.log(`即将执行技能: ${skill.name}`)
-
-    // 返回 false 阻止执行
-    if (skill.dangerous && !params._userConfirmed) {
-      return false
-    }
-
-    return params
-  },
-}
-```
-
-### afterSkillExecute
-
-在技能执行后调用。
-
-```javascript
-hooks: {
-  async afterSkillExecute(skill, params, result) {
-    // 可以修改 result
-    console.log(`技能 ${skill.name} 执行完成`)
-    return result
-  },
-}
-```
-
 ### onUserMessage
 
-在用户消息到达技能匹配前调用。可修改用户输入。
+在用户消息被处理前调用。可修改用户输入。
 
 ```javascript
 hooks: {
@@ -176,7 +141,7 @@ hooks: {
 ```javascript
 async contextProvider(userInput, context) {
   // userInput: 用户当前输入
-  // context: { activeSkillId, sessionId, ... }
+  // context: { sessionId, ... }
 
   // 返回的字符串会被注入到 AI prompt 中
   return `## 自定义上下文\n当前时间: ${new Date().toISOString()}`
@@ -195,7 +160,6 @@ onLoad(context) {
   // - logger: console 对象
   // - pluginsDir: 插件根目录
   // - pluginDir: 当前插件目录
-  // - skillsDB: 技能数据库（可选）
 
   // 适合做初始化工作
   this.cache = new Map()
@@ -214,7 +178,7 @@ onUnload() {
 ## 插件目录结构
 
 ```
-~/.ai-terminal/plugins/
+~/.folio/plugins/
 ├── my-plugin/
 │   ├── plugin.js          # 入口文件（或 index.js）
 │   ├── package.json       # 可选，依赖声明
@@ -281,16 +245,3 @@ contextProvider 返回的内容会被注入到 AI prompt 中。避免返回过�
 ### 5. 优先级设置
 
 高优先级插件的钩子会先执行。对于关键路径上的插件（如安全检查），设置较高的 priority。
-
-## 与技能系统的关系
-
-| 维度 | 技能（Skill） | 插件（Plugin） |
-|------|--------------|----------------|
-| 定义方式 | SKILL.md（Markdown + YAML） | plugin.js（代码模块） |
-| 主要能力 | Prompt 注入、脚本执行 | 工具注册、钩子、上下文注入 |
-| 运行时机 | 用户主动激活或 trigger 匹配 | 系统启动自动加载 |
-| 修改用户输入 | 否 | 是（通过 onUserMessage 钩子） |
-| 注册新工具 | 否 | 是 |
-| 适合场景 | 领域知识、工作流 | 基础设施、工具集成 |
-
-技能和插件可以协同工作：插件可以在技能执行前后通过钩子注入逻辑，也可以通过 contextProvider 为技能提供额外的上下文。

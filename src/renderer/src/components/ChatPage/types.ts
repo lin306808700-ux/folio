@@ -110,8 +110,6 @@ export interface ChatRequestEnvelope {
   text: string
   quote?: QuoteContext
   images?: ImageAttachment[]
-  skillId?: string
-  skillPrompt?: string
 }
 
 export type RichFormFieldType =
@@ -191,8 +189,7 @@ export interface Message {
   role: 'user' | 'assistant'
   content: string
   images?: ImageAttachment[]
-  type?: 'text' | 'command' | 'command_options' | 'skill_install' | 'script' | 'search_replace' | 'task_planning' | 'task_plan_confirm' | 'task_progress' | 'task_confirm' | 'task_step_error' | 'browser_screenshot' | 'error' | 'unified_task' | 'muse_transfer' | 'muse_letter' | 'rich_form' | 'artifact'
-  skillData?: { url: string; skillName?: string }
+  type?: 'text' | 'command' | 'command_options' | 'script' | 'search_replace' | 'task_planning' | 'task_plan_confirm' | 'task_progress' | 'task_confirm' | 'task_step_error' | 'browser_screenshot' | 'error' | 'unified_task' | 'muse_transfer' | 'muse_letter' | 'rich_form' | 'artifact'
   commandOptions?: CommandOption[]
   scriptData?: {
     scriptFile: string
@@ -259,10 +256,10 @@ export interface Message {
     label: string
     draft: string
   }
-  /** 上下文标签（当前注入的技能/模板/craft规则） */
+  /** 上下文标签（当前注入的模板/craft规则） */
   contextChips?: Array<{
     id: string
-    type: 'skill' | 'template' | 'craft' | 'pipeline'
+    type: 'template' | 'craft' | 'pipeline'
     label: string
     detail?: string
   }>

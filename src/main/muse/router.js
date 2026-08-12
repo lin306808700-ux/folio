@@ -19,17 +19,17 @@ const artifactStore = require('./artifact-store')
 /**
  * 获取用户在前端 UI 设置的「当前工作区」目录。
  *
- * 注意：这与 Muse 自身的家目录（.ai-terminal/muse，即 MUSE_HOME/PROJECT_DIR）是两个不同概念：
+ * 注意：这与 Muse 自身的家目录（.folio/muse，即 MUSE_HOME/PROJECT_DIR）是两个不同概念：
  * - MUSE_HOME：Muse 的内部数据（日志、记忆、profile、journal 等），不对用户暴露；
  * - 当前工作区：用户表达意图、创建/读写文件时产物应落地的真实项目目录。
  *
  * 因此 ReAct 工具的 cwd / 文件落地根必须用这个，绝不能落进软件自身的源码仓库。
- * 优先读 ~/.ai-terminal/workspace.json 的 currentWorkspace（与 chat-handler/terminal-manager 一致），
+ * 优先读 ~/.folio/workspace.json 的 currentWorkspace（与 chat-handler/terminal-manager 一致），
  * 未设置或路径失效时回退到用户 HOME，而非 muse 项目根目录，避免污染软件源码。
  */
 function getCurrentWorkspace() {
   try {
-    const configPath = path.join(process.env.HOME || '', '.ai-terminal', 'workspace.json')
+    const configPath = path.join(process.env.HOME || '', '.folio', 'workspace.json')
     if (fs.existsSync(configPath)) {
       const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
       if (config.currentWorkspace && fs.existsSync(config.currentWorkspace)) {
@@ -98,25 +98,8 @@ function init(mainWindow, chatHandler) {
 function classifyIntent(userInput, options = {}) {
   const input = userInput.trim()
 
-  // 技能编辑模式 / 脚本模板 → 走 chat
-  if (options.skillEditMode || options.scriptTemplate) {
-    return 'chat'
-  }
-
-  // 已有技能激活 → 检查技能模式
-  if (options.activeSkillId) {
-    try {
-      const { Skills } = require('../database')
-      const skill = Skills.loadFromDir(options.activeSkillId)
-      // 如果技能声明了 mode: react，走 tool 路径（Node ReAct 引擎(react-engine) 自主执行）
-      if (skill && skill.mode === 'react') {
-        return 'tool'
-      }
-      // 含 shell 命令的完整技能文档，走 tool 路径
-      if (skill && skill.content && skill.content.includes('```bash') && skill.content.includes('## ')) {
-        return 'tool'
-      }
-    } catch (_) {}
+  // 脚本模板 → 走 chat
+  if (options.scriptTemplate) {
     return 'chat'
   }
 
@@ -217,7 +200,7 @@ async function handleInputStream(params) {
  * @param {boolean} isFollowup - 是否为追问（恢复上轮会话上下文）
  */
 async function handleToolTask(params, isFollowup = false) {
-  const { userInput, activeSkillId, sessionId: chatSessionId } = params
+  const { userInput, sessionId: chatSessionId } = params
 
   try {
     const museContext = gatherOwnerContext()
@@ -226,33 +209,6 @@ async function handleToolTask(params, isFollowup = false) {
       sessionId: chatSessionId || getMuseSessionId(),
       memories: museContext?.memories || '',
       profile: museContext?.profile || '',
-      skills: museContext?.skills || '',
-    }
-
-    // 如果有激活技能，将技能文档注入 context
-    if (activeSkillId) {
-      try {
-        const { Skills } = require('../database')
-        const skill = Skills.loadFromDir(activeSkillId)
-        if (skill && skill.content) {
-          context.activeSkillDoc = skill.content
-          if (skill.depends && skill.depends.length > 0) {
-            const depDocs = []
-            for (const depId of skill.depends) {
-              const depSkill = Skills.loadFromDir(depId)
-              if (depSkill && depSkill.content) {
-                depDocs.push(`## 依赖技能: ${depSkill.name}\n\n${depSkill.content}`)
-              }
-            }
-            if (depDocs.length > 0) {
-              context.activeSkillDoc += '\n\n---\n\n' + depDocs.join('\n\n---\n\n')
-            }
-          }
-          console.log('[MuseRouter] 注入激活技能文档:', skill.name)
-        }
-      } catch (e) {
-        console.warn('[MuseRouter] 加载激活技能失败:', e.message)
-      }
     }
 
     // 追问：注入上轮会话上下文
@@ -272,21 +228,6 @@ async function handleToolTask(params, isFollowup = false) {
     } else {
       // 新任务：创建新 session
       createSession(userInput)
-    }
-
-    // 技能模式下注入自主执行指令
-    if (activeSkillId) {
-      const agentDirective = [
-        '[AGENT MODE] 你是一个自主执行的 Agent，必须遵守以下规则：',
-        '1. 遇到任何错误（登录过期、工具未安装、参数缺失等）时，必须自行尝试修复，绝不能停下来让用户手动操作。',
-        '2. 如果某个命令缺少参数，根据技能文档和上下文自动补全参数后重试。',
-        '3. 如果某个前置依赖未满足（如未登录），自动执行登录/安装等前置步骤后继续原任务。',
-        '4. 只有在连续尝试 3 次仍失败、或需要用户提供无法推断的敏感信息（如密码）时，才可以暂停并告知用户。',
-        '5. 每一步执行后分析结果，决定下一步行动，直到任务完成。',
-        '6. 如果最终结果内容较长（超过 500 字），必须将完整结果写入文件（如 .md/.html/.txt），然后在 final_answer 中告知文件路径。绝不能只在 final_answer 中输出大段文本——会被截断。',
-        ''
-      ].join('\n')
-      command = agentDirective + command
     }
 
     const result = await executeReAct(command, context)
@@ -368,7 +309,7 @@ function registerArtifactsFromResult(result, command) {
  * @param {boolean} isFollowup - 是否为追问
  */
 async function handleToolTaskStream(params, isFollowup = false) {
-  const { userInput, activeSkillId, sessionId: chatSessionId } = params
+  const { userInput, sessionId: chatSessionId } = params
 
   try {
     const museContext = gatherOwnerContext()
@@ -377,34 +318,6 @@ async function handleToolTaskStream(params, isFollowup = false) {
       sessionId: chatSessionId || getMuseSessionId(),
       memories: museContext?.memories || '',
       profile: museContext?.profile || '',
-      skills: museContext?.skills || '',
-    }
-
-    // 如果有激活技能，将技能文档注入 context
-    if (activeSkillId) {
-      try {
-        const { Skills } = require('../database')
-        const skill = Skills.loadFromDir(activeSkillId)
-        if (skill && skill.content) {
-          context.activeSkillDoc = skill.content
-          // 同时注入依赖技能内容
-          if (skill.depends && skill.depends.length > 0) {
-            const depDocs = []
-            for (const depId of skill.depends) {
-              const depSkill = Skills.loadFromDir(depId)
-              if (depSkill && depSkill.content) {
-                depDocs.push(`## 依赖技能: ${depSkill.name}\n\n${depSkill.content}`)
-              }
-            }
-            if (depDocs.length > 0) {
-              context.activeSkillDoc += '\n\n---\n\n' + depDocs.join('\n\n---\n\n')
-            }
-          }
-          console.log('[MuseRouter] [Stream] 注入激活技能文档:', skill.name, '长度:', context.activeSkillDoc.length)
-        }
-      } catch (e) {
-        console.warn('[MuseRouter] 加载激活技能失败:', e.message)
-      }
     }
 
     // 追问：注入上轮上下文
@@ -425,23 +338,8 @@ async function handleToolTaskStream(params, isFollowup = false) {
       createSession(userInput)
     }
 
-    // 技能模式下注入自主执行指令，确保 Agent 遇到错误时自动修复而非停下来问用户
-    if (activeSkillId) {
-      const agentDirective = [
-        '[AGENT MODE] 你是一个自主执行的 Agent，必须遵守以下规则：',
-        '1. 遇到任何错误（登录过期、工具未安装、参数缺失等）时，必须自行尝试修复，绝不能停下来让用户手动操作。',
-        '2. 如果某个命令缺少参数，根据技能文档和上下文自动补全参数后重试。',
-        '3. 如果某个前置依赖未满足（如未登录），自动执行登录/安装等前置步骤后继续原任务。',
-        '4. 只有在连续尝试 3 次仍失败、或需要用户提供无法推断的敏感信息（如密码）时，才可以暂停并告知用户。',
-        '5. 每一步执行后分析结果，决定下一步行动，直到任务完成。',
-        '6. 如果最终结果内容较长（超过 500 字），必须将完整结果写入文件（如 .md/.html/.txt），然后在 final_answer 中告知文件路径。绝不能只在 final_answer 中输出大段文本——会被截断。',
-        ''
-      ].join('\n')
-      command = agentDirective + command
-    }
-
     await executeReActWithIPC(command, userInput, context, {
-      source: activeSkillId ? 'router_skill' : (isFollowup ? 'router_followup' : 'router_tool'),
+      source: isFollowup ? 'router_followup' : 'router_tool',
       intentClassification: isFollowup ? 'tool_followup' : 'tool',
     })
 
@@ -457,7 +355,7 @@ async function handleToolTaskStream(params, isFollowup = false) {
  * 供 handleToolTaskStream 和 chat-handler 的 MUSE_TASK 转交共用
  * @param {string} command - 给 ReAct 引擎的完整 prompt（含 agent directive 等）
  * @param {string} displayCommand - 给前端展示的用户原始输入
- * @param {object} context - ReAct 上下文 { workspace, memories, profile, skills, ... }
+ * @param {object} context - ReAct 上下文 { workspace, memories, profile, ... }
  * @param {object} [logOptions] - 日志选项 { source, intentClassification }
  */
 /**

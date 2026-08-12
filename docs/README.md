@@ -1,4 +1,4 @@
-# Muse AI-Terminal 文档
+# Muse Folio 文档
 
 ## 目录
 
@@ -9,7 +9,6 @@
 | [MCP Server](mcp-server.md) | MCP 协议接入配置（Claude Desktop / Cursor） |
 | [沙箱安全](sandbox.md) | 工作区隔离、命令安全、路径访问控制 |
 | [工具开发](tools.md) | 自定义工具开发指南 |
-| [Skill 编写](skills.md) | 三层 Skill 体系与编写教程 |
 | [插件开发](plugin-development.md) | 插件接口、工具、钩子与生命周期 |
 
 ## 快速链接

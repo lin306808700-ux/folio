@@ -1,15 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso'
-import { Sparkles, Eraser, Clock, Activity, Zap, ShieldCheck, Terminal as TerminalIcon, Wand2, Square, Shield, Trash2, RefreshCw, X, Plus, Pencil, ChevronsDown, FolderOpen, Play, Code2, Box, ChevronDown, ChevronRight, Minimize2, RotateCcw } from 'lucide-react'
+import { Sparkles, Eraser, Clock, Activity, Zap, ShieldCheck, Terminal as TerminalIcon, Square, Shield, Trash2, RefreshCw, X, ChevronsDown, FolderOpen, Play, Code2, Box, ChevronDown, ChevronRight, Minimize2, RotateCcw } from 'lucide-react'
 import { Terminal } from '../Terminal'
 import { MuseAvatar, MuseState } from '../MuseAvatar'
 import { emitMuseInteraction } from '../muse-interaction-bus'
 
 import { useSessionStatus } from './hooks/useSessionStatus'
 import { useInputHistory } from './hooks/useInputHistory'
-import { useSkills } from './hooks/useSkills'
 import { useHistoryRecords } from './hooks/useHistoryRecords'
 import { useChatMessages } from './hooks/useChatMessages'
 import { useSlashCommands, SlashCommand } from './hooks/useSlashCommands'
@@ -23,7 +21,6 @@ import { SessionHeader } from './components/SessionHeader'
 import { ChatInput } from './components/ChatInput'
 import { TriggerPopup } from './components/TriggerPopup'
 import { SearchStatusDisplay } from './components/SearchStatus'
-import { SkillEditModal } from './components/SkillEditModal'
 import { StatusItem } from './components/StatusItem'
 import { TaskRecoveryBanner } from './components/TaskRecoveryBanner'
 import { ContextChipStrip } from './components/ContextChipStrip'
@@ -117,19 +114,10 @@ function ReactStepCard({ step }: { step: import('./hooks/useReactProgress').Reac
 }
 
 export const ChatPage = () => {
-  const navigate = useNavigate()
   const [input, setInput] = useState('')
   const [attachedImages, setAttachedImages] = useState<ImageAttachment[]>([])
-  const [skillEditMode, setSkillEditMode] = useState<{
-    id: string
-    name: string
-    content: string
-    description?: string
-    isNew?: boolean
-  } | null>(null)
   const [quoteContext, setQuoteContext] = useState<QuoteContext | null>(null)
   const [queuedRequests, setQueuedRequests] = useState<ChatRequestEnvelope[]>([])
-  const [editingSkillFromMenu, setEditingSkillFromMenu] = useState<any>(null)
   const [showScrollToBottom, setShowScrollToBottom] = useState(false)
   const virtuosoRef = useRef<VirtuosoHandle>(null)
   const pinchZoom = usePinchZoom()
@@ -208,7 +196,6 @@ export const ChatPage = () => {
 
   // Hooks
   const session = useSessionStatus(isElectron)
-  const skillsHook = useSkills(isElectron)
   const handleSendRef = useRef<() => void>(() => {})
   const inputHistoryHook = useInputHistory(input, setInput, () => handleSendRef.current())
   const slashCommands = useSlashCommands()
@@ -217,15 +204,10 @@ export const ChatPage = () => {
   const chat = useChatMessages({
     isElectron,
     sessionIdRef: session.sessionIdRef,
-    selectedSkill: skillsHook.selectedSkill,
-    setSelectedSkill: skillsHook.setSelectedSkill,
     setLatency: session.setLatency,
     setSafetyLevel: session.setSafetyLevel,
-    refreshSkills: skillsHook.refreshSkills,
     resetSession: session.resetSession,
-    recordInput: inputHistoryHook.recordInput,
-    skillEditMode,
-    setSkillEditMode
+    recordInput: inputHistoryHook.recordInput
   })
 
   const historyHook = useHistoryRecords(isElectron, chat.setMessages)
@@ -379,8 +361,6 @@ export const ChatPage = () => {
       text: msg,
       quote: quoteContext || undefined,
       images: imagesToSend.length > 0 ? imagesToSend : undefined,
-      skillId: skillEditMode ? skillEditMode.id : skillsHook.selectedSkill?.id,
-      skillPrompt: skillEditMode ? skillEditMode.content : skillsHook.selectedSkill?.content,
     }
     setInput('')
     setAttachedImages([])
@@ -653,31 +633,6 @@ export const ChatPage = () => {
           contextStats={contextStats}
         />
 
-        {/* 技能编辑模式指示条 */}
-        {skillEditMode && (
-          <div className="flex items-center justify-between px-4 py-3 bg-violet-500/10 border-b border-violet-500/20">
-            <div className="flex items-center gap-2">
-              <Wand2 size={16} className="text-violet-300" />
-              <span className="text-sm font-semibold text-violet-200">
-                技能编辑模式
-              </span>
-              <span className="text-sm text-violet-300">
-                {skillEditMode.isNew ? '正在创建新技能' : `正在优化「${skillEditMode.name}」`}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  setSkillEditMode(null)
-                }}
-                className="px-3 py-1 text-xs font-semibold text-violet-200 bg-violet-500/20 hover:bg-violet-500/30 rounded-lg transition-colors"
-              >
-                退出编辑
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* 上下文模式指示器 */}
         {contextInfo.mode === 'light' && contextInfo.size > 0 && (
           <div className="flex items-center justify-center py-1.5 border-b border-border-subtle/60">
@@ -766,10 +721,8 @@ export const ChatPage = () => {
                       onExecuteCommand={chat.executeCommand}
                       onExecuteScript={chat.executeScript}
                       onExecuteSpecificCommand={chat.executeSpecificCommand}
-                      onInstallSkill={chat.installSkill}
                       onConfirmTask={chat.confirmTaskAction}
                       onRetry={chat.handleRetry}
-                      onSkillsSaved={skillsHook.refreshSkills}
                       onAnalyzeOutput={chat.analyzeTerminalOutput}
                       onQuote={(m) => {
                         setQuoteContext({ messageId: m.id, role: m.role, selectedText: m.content })
@@ -936,90 +889,14 @@ export const ChatPage = () => {
             </div>
           )}
 
-          {/* 技能选择面板 */}
-          {skillsHook.showSkillMenu && skillsHook.skills.length > 0 && (
-            <div className="absolute bottom-full left-0 right-0 mb-2 mx-4 z-50" onMouseDown={e => e.stopPropagation()}>
-              <div className="bg-slate-800 border border-slate-600 rounded-lg shadow-xl overflow-hidden max-h-[60vh] flex flex-col">
-                <div className="px-4 py-2 text-xs font-bold text-slate-400 uppercase border-b border-slate-600 flex-shrink-0">选择技能</div>
-                {skillsHook.selectedSkill && (
-                  <div
-                    onClick={() => skillsHook.setSelectedSkill(null)}
-                    className="flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors hover:bg-slate-700/50 text-slate-400 border-b border-slate-700 flex-shrink-0"
-                  >
-                    <X size={14} className="text-slate-500 flex-shrink-0" />
-                    <span className="text-sm">取消技能</span>
-                  </div>
-                )}
-                <div className="overflow-y-auto flex-1">
-                {skillsHook.skills.map(s => (
-                  <div
-                    key={s.id}
-                    className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${
-                      skillsHook.selectedSkill?.id === s.id ? 'bg-slate-700' : 'hover:bg-slate-700/50'
-                    }`}
-                  >
-                    <button onClick={() => { skillsHook.setSelectedSkill(s); skillsHook.setShowSkillMenu(false) }}
-                      className="flex-1 flex items-center gap-3 min-w-0">
-                      <Zap size={14} className={skillsHook.selectedSkill?.id === s.id ? 'text-indigo-400' : 'text-slate-400'} />
-                      <div className="flex-1 min-w-0">
-                        <div className={`text-sm truncate ${skillsHook.selectedSkill?.id === s.id ? 'text-indigo-300 font-semibold' : 'text-slate-200'}`}>{s.name}</div>
-                        {s.description && <div className="text-xs text-slate-500 truncate mt-0.5">{s.description}</div>}
-                      </div>
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setSkillEditMode({ id: s.id, name: s.name, content: s.content || '', description: s.description })
-                        skillsHook.setShowSkillMenu(false)
-                      }}
-                      className="p-1.5 text-slate-500 hover:text-indigo-400 transition-colors rounded"
-                      title="对话编辑模式"
-                    >
-                      <Wand2 size={12} />
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setEditingSkillFromMenu(s) }}
-                      className="p-1.5 text-slate-500 hover:text-slate-300 transition-colors rounded"
-                      title="编辑技能"
-                    >
-                      <Pencil size={12} />
-                    </button>
-                  </div>
-                ))}
-                </div>
-                <div
-                  onClick={() => {
-                    setSkillEditMode({ id: '', name: '新技能', content: '', isNew: true })
-                    skillsHook.setShowSkillMenu(false)
-                  }}
-                  className="flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors hover:bg-slate-700/50 border-t border-slate-600 text-emerald-400"
-                >
-                  <Plus size={14} className="text-emerald-500 flex-shrink-0" />
-                  <span className="text-sm">新建技能（对话模式）</span>
-                </div>
-              </div>
-            </div>
-          )}
-
           <ChatInput
             input={input}
             onInputChange={(v) => { setInput(v); inputHistoryHook.resetHistoryIndex() }}
             onSend={handleSend}
             onKeyDown={handleKeyDown}
             loading={chat.loading}
-            selectedSkill={skillsHook.selectedSkill}
-            onClearSkill={() => skillsHook.setSelectedSkill(null)}
-            skills={skillsHook.skills}
-            showSkillMenu={skillsHook.showSkillMenu}
-            onToggleSkillMenu={() => skillsHook.setShowSkillMenu(!skillsHook.showSkillMenu)}
-            onSelectSkill={(s) => { skillsHook.setSelectedSkill(s); skillsHook.setShowSkillMenu(false) }}
-            skillMenuRef={skillsHook.skillMenuRef}
             isElectron={isElectron}
             textareaRef={textareaRef}
-            onUpdateSkill={skillsHook.updateSkill}
-            refreshSkills={skillsHook.refreshSkills}
-            skillEditMode={skillEditMode}
-            setSkillEditMode={setSkillEditMode}
             onClearMessages={() => chat.setMessages([])}
             onSlashInput={handleSlashInput}
             onTriggerInput={handleTriggerInput}
@@ -1033,20 +910,6 @@ export const ChatPage = () => {
             onClearQuote={() => setQuoteContext(null)}
           />
         </div>
-
-        {/* 技能编辑弹窗（由技能面板的编辑按钮触发） */}
-        {editingSkillFromMenu && (
-          <SkillEditModal
-            mode="edit"
-            skill={editingSkillFromMenu}
-            onClose={() => setEditingSkillFromMenu(null)}
-            onSave={async (skillData) => {
-              await skillsHook.updateSkill(editingSkillFromMenu.id, skillData)
-              setEditingSkillFromMenu(null)
-              skillsHook.refreshSkills()
-            }}
-          />
-        )}
       </div>
 
       {/* 右侧：按需侧滑面板 */}
@@ -1218,19 +1081,6 @@ export const ChatPage = () => {
                   </div>
                 )}
 
-                {/* 技能状态 */}
-                <div className="bg-surface/50 dark:bg-white/[0.03] border border-border-subtle/50 dark:border-white/[0.06] rounded-xl p-4">
-                  <div className="text-xs text-text-muted dark:text-slate-400 font-medium mb-2">已激活技能</div>
-                  {skillsHook.selectedSkill ? (
-                    <div className="flex items-center gap-2">
-                      <Zap size={12} className="text-yellow-500 dark:text-yellow-400" />
-                      <span className="text-sm text-text-primary dark:text-white">{skillsHook.selectedSkill.name}</span>
-                    </div>
-                  ) : (
-                    <span className="text-xs text-text-faint dark:text-slate-600">无</span>
-                  )}
-                </div>
-
                 {/* 快捷操作 */}
                 <div className="bg-surface/50 dark:bg-white/[0.03] border border-border-subtle/50 dark:border-white/[0.06] rounded-xl p-4">
                   <div className="text-xs text-text-muted dark:text-slate-400 font-medium mb-3">快捷操作</div>
@@ -1246,10 +1096,6 @@ export const ChatPage = () => {
                     <button onClick={() => handleSwitchMode('terminal')} className="flex items-center gap-1.5 px-2.5 py-2 bg-surface/60 hover:bg-surface dark:bg-white/[0.04] dark:hover:bg-white/[0.08] border border-border-subtle/50 dark:border-white/[0.06] rounded-lg text-[11px] text-text-secondary hover:text-text-primary dark:text-slate-400 dark:hover:text-white transition-all">
                       <TerminalIcon size={11} className="text-emerald-500 dark:text-emerald-400" />
                       <span>终端</span>
-                    </button>
-                    <button onClick={() => navigate('/skills')} className="flex items-center gap-1.5 px-2.5 py-2 bg-surface/60 hover:bg-surface dark:bg-white/[0.04] dark:hover:bg-white/[0.08] border border-border-subtle/50 dark:border-white/[0.06] rounded-lg text-[11px] text-text-secondary hover:text-text-primary dark:text-slate-400 dark:hover:text-white transition-all">
-                      <Zap size={11} className="text-yellow-500 dark:text-yellow-400" />
-                      <span>技能管理</span>
                     </button>
                   </div>
                 </div>

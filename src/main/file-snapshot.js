@@ -12,12 +12,12 @@ const os = require('os')
  * 2. 在脚本执行前，只备份这些文件（copy 到备份目录）
  * 3. 备份文件名带时间戳和原路径编码，回滚时直接 copy 回去
  *
- * 备份目录：~/.ai-terminal/snapshots/
+ * 备份目录：~/.folio/snapshots/
  * 备份文件命名：{timestamp}_{encodedOriginalPath}
  * 元信息文件：{timestamp}_{scriptId}.meta.json
  */
 
-const SNAPSHOTS_DIR = path.join(os.homedir(), '.ai-terminal', 'snapshots')
+const SNAPSHOTS_DIR = path.join(os.homedir(), '.folio', 'snapshots')
 const MAX_FILE_SIZE = 10 * 1024 * 1024  // 10MB，超过此大小的文件不备份
 const MAX_SNAPSHOTS = 200               // 最多保留的元信息文件数
 

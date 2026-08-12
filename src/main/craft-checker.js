@@ -6,7 +6,7 @@
  * 借鉴 Open Design 的 craft 规则体系：
  * AI 生成内容后，自动加载匹配的质量检查规则做一轮 self-review critique。
  * 
- * 规则位置：~/.ai-terminal/craft/*.md
+ * 规则位置：~/.folio/craft/*.md
  * 规则格式：YAML frontmatter + Markdown 正文（检查清单）
  * 
  * frontmatter 字段：
@@ -25,9 +25,9 @@
 
 const fs = require('fs')
 const path = require('path')
-const { parseFrontmatter } = require('./skill-schema')
+const { parseFrontmatter } = require('./frontmatter')
 
-const CRAFT_DIR = path.join(process.env.HOME || '', '.ai-terminal', 'craft')
+const CRAFT_DIR = path.join(process.env.HOME || '', '.folio', 'craft')
 const BUILTIN_CRAFT_DIR = path.join(__dirname, '..', '..', 'craft')
 
 let _ruleCache = null

@@ -39,7 +39,7 @@ function isAbortRequested() {
   return _abortRequested
 }
 const MAX_LOG_LENGTH = 8000
-const CHECKPOINT_DIR = path.join(os.homedir(), '.ai-terminal', 'muse', 'checkpoints')
+const CHECKPOINT_DIR = path.join(os.homedir(), '.folio', 'muse', 'checkpoints')
 
 // ========== 断点恢复 ==========
 
@@ -127,7 +127,7 @@ function clearCheckpoint(command) {
 
 /**
  * Handoff: 生成结构化交接文档
- * 借鉴 Claude Code Handoff skill (Matt Pocock)
+ * 借鉴 Claude Code Handoff 提示词设计 (Matt Pocock)
  * 任务中断/超时/步数耗尽时，将当前会话压缩为 markdown 文档
  * 包含：任务目的、已完成内容、未完成项、修改的文件、建议的后续步骤
  */
@@ -210,7 +210,7 @@ function truncateLog(text, maxLength = MAX_LOG_LENGTH) {
 
 /**
  * Context Mode: 智能过滤 shell 输出噪音
- * 借鉴 Claude Code Context Mode skill (16.3k stars)
+ * 借鉴 Claude Code Context Mode 提示词设计
  * 过滤 npm/pip/git/build 进度日志、重复行、警告噪音，只保留关键信息
  * 在 observation 进入 history 前调用，减少 context token 浪费
  */
@@ -270,7 +270,7 @@ function cleanObservation(text, maxLength = MAX_LOG_LENGTH) {
 
 /**
  * git-commit-writer: 从 steps 历史自动生成 Conventional Commits 消息
- * 借鉴 Claude Code git-commit-writer skill (116 installs, 最热门)
+ * 借鉴 Claude Code git-commit-writer 提示词设计
  * 分析最近的文件操作步骤，生成 feat/fix/refactor/docs/chore 类型的提交消息
  */
 function generateCommitMessage(steps, command) {
@@ -1363,7 +1363,7 @@ const CODE_SIMPLIFIER_CHECK = `## 代码清理（final 前自检）
 
 /**
  * frontend-design：反 AI slop 设计规范（Encoded Preference）
- * 来源：Anthropic 官方 Skill，110k+ weekly installs
+ * 来源：Anthropic 官方提示词实践
  * 检测到前端/UI/网页任务时自动注入
  */
 const FRONTEND_DESIGN_GUIDE = `## 前端设计规范（生成 UI/网页时必须遵守）
@@ -1413,7 +1413,7 @@ function detectFrontendTask(command) {
 
 /**
  * Grill Me: 复杂任务首步澄清规则（Encoded Preference）
- * 来源：Matt Pocock 的 grill-me skill，156k installs
+ * 来源：Matt Pocock 的 grill-me 提示词实践
  * 防止 AI 带着错误假设冲上前
  */
 const GRILL_ME_RULE = `## 首步澄清（复杂任务）
@@ -1425,7 +1425,7 @@ const GRILL_ME_RULE = `## 首步澄清（复杂任务）
 
 /**
  * /simplify: final 前自动自审（Capability Uplift）
- * 来源：Anthropic 官方内置 /simplify skill
+ * 来源：Anthropic 官方内置 /simplify 提示词实践
  * 在 plan 全部完成后、真正 final 前，强制自审一轮：
  * 1. 代码复用：是否有重复逻辑可提取？
  * 2. 代码质量：命名是否清晰？嵌套是否过深？
@@ -1442,8 +1442,6 @@ function buildReactPrompt(command, context, history, taskPlan = null) {
   const workspace = context.workspace || process.cwd()
   const profile = context.profile || ''
   const memories = context.memories || ''
-  const skills = context.skills || ''
-  const activeSkillDoc = context.activeSkillDoc || ''
   const previousTask = context.previousTask || null
 
   // 检测前端任务，条件注入设计规范
@@ -1468,8 +1466,6 @@ function buildReactPrompt(command, context, history, taskPlan = null) {
 - 系统: macOS (Darwin)
 ${profile ? `- 主人画像: ${profile.slice(0, 200)}` : ''}
 ${memories ? `\n## 记忆\n${memories.slice(0, 800)}\n` : ''}
-${skills ? `\n## 可用技能\n${skills.slice(0, 500)}\n` : ''}
-${activeSkillDoc ? `\n## 当前激活技能文档\n${activeSkillDoc.slice(0, 2000)}\n` : ''}
 ${previousTask ? `\n## 上轮任务上下文\n- 命令: ${previousTask.command}\n- 结果: ${(previousTask.answer || '').slice(0, 300)}\n${previousTask.artifacts ? `- 产物: ${previousTask.artifacts}` : ''}\n` : ''}## 工具
 ${TOOLS_SCHEMA}
 ${traceHint}

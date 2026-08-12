@@ -2,20 +2,14 @@
 export async function callAI(
   userInput: string,
   sessionId: string,
-  skillPrompt?: string,
-  scriptTemplate?: any,
-  activeSkillId?: string,  // 当前激活技能的目录名，用于后端 autoExecute 拦截
-  skillEditMode?: { id: string; name: string; content: string; description?: string; isNew?: boolean }  // 技能编辑模式
+  scriptTemplate?: any
 ): Promise<{ content: string; webSearched: boolean; isTask?: boolean; isScript?: boolean; isSearchReplace?: boolean }> {
   if (!window.electronAPI) throw new Error('Electron API 不可用')
 
   const result = await window.electronAPI.ai.call({
     userInput,
     sessionId,
-    skillPrompt,
-    scriptTemplate,
-    activeSkillId,
-    skillEditMode
+    scriptTemplate
   })
 
   if (!result.success) throw new Error(result.error || 'AI 服务调用失败')
@@ -33,10 +27,7 @@ export async function callAI(
 export function callAIStream(
   userInput: string,
   sessionId: string,
-  skillPrompt?: string,
   scriptTemplate?: any,
-  activeSkillId?: string,
-  skillEditMode?: { id: string; name: string; content: string; description?: string; isNew?: boolean },
   messages?: Array<{ role: 'user' | 'assistant'; content: string }>,
   images?: Array<{ dataUrl: string; mimeType: string; name?: string }>
 ): void {
@@ -45,10 +36,7 @@ export function callAIStream(
   window.electronAPI.ai.stream({
     userInput,
     sessionId,
-    skillPrompt,
     scriptTemplate,
-    activeSkillId,
-    skillEditMode,
     messages,
     images
   })

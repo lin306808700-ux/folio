@@ -57,7 +57,7 @@ Chapters are pre-written in the background, so the page is ready when you are.
 <!-- 截图占位：进度看板视图 -->
 
 ### 🤖 AI Terminal
-内置 AI 对话与 ReAct 工具执行引擎，命令安全策略 + 沙箱隔离；支持 MCP Server、插件与三层技能体系。
+内置 AI 对话与 ReAct 工具执行引擎，命令安全策略 + 沙箱隔离；支持 MCP Server 与插件体系。
 
 ![对话页](docs/screenshots/chat.png)
 <!-- 截图占位：AI 对话页（可选） -->

@@ -6,7 +6,7 @@
  * 借鉴 Open Design 的 design-system 思路：
  * 用户预定义 .md 模板文件，AI 在特定场景自动加载对应模板作为 system prompt 的一部分。
  * 
- * 模板位置：~/.ai-terminal/prompt-templates/*.md
+ * 模板位置：~/.folio/prompt-templates/*.md
  * 模板格式：YAML frontmatter + Markdown 正文
  * 
  * frontmatter 字段：
@@ -20,9 +20,9 @@
 
 const fs = require('fs')
 const path = require('path')
-const { parseFrontmatter } = require('./skill-schema')
+const { parseFrontmatter } = require('./frontmatter')
 
-const TEMPLATES_DIR = path.join(process.env.HOME || '', '.ai-terminal', 'prompt-templates')
+const TEMPLATES_DIR = path.join(process.env.HOME || '', '.folio', 'prompt-templates')
 const BUILTIN_TEMPLATES_DIR = path.join(__dirname, '..', '..', 'prompt-templates')
 
 // 内存缓存（避免每次都读磁盘）

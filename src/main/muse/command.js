@@ -250,7 +250,6 @@ ${command}
 
 【环境信息】
 工作区目录：${context.workspace || '未知'}
-${context.skills || '无可用技能'}
 ${context.systemTools || '无系统工具信息'}${feedbackSection}${pastExperience ? `\n\n【过往经验（历史积累，非当前任务状态）】\n${pastExperience}` : ''}${task.referenceContext ? `\n\n${task.referenceContext}` : ''}
 
 分析这个任务，以 JSON 格式返回：
@@ -281,13 +280,10 @@ ${context.systemTools || '无系统工具信息'}${feedbackSection}${pastExperie
 - 如果可以拆分成独立的子任务，shouldSplit 为 true，并列出 subtasks
 - 如果需要主人决策（如选择方案），needsOwnerDecision 为 true
 - 【重要】如果任务需要在某个代码项目/仓库中搜索、阅读、修改代码（如"帮我改一下项目里的登录按钮"、"在 xxx 项目中添加一个接口"），设 isCodeTask 为 true，填写 codeTaskDir（项目根目录）。代码任务会使用渐进式搜索→读取→编辑的方式完成。
-- 【绝对禁止】如果任务是通过 skill（如 aiway 发帖/评论/私信、API 调用等社区或网络操作），isCodeTask 必须为 false，不要去搜索代码文件，直接生成脚本调用 API 执行即可。
 - 【重要】如果任务是修改工作区内已有的产物文件（如"颜色改深一点"、"标题字体换大"），设 editExistingFile 为 true，填写 editTargetFiles 和 editRequest。精确编辑比重新生成更高效。
 - 【重要】对于创造性任务（如生成PPT、设计海报、做网站等），必须设 needsOwnerDecision 为 true，在 decisionQuestion 中说明你打算用什么方案/工具/技术来实现，让主人确认后再动手。不要自作主张选择实现方式。
 - 【重要】needsConfirmBeforeExec：拆解后是否需要主人确认再执行。对于简单、低风险、明确的任务（如发帖、查询信息、执行日常操作等），设为 false，直接执行不打扰主人。对于复杂、高风险、涉及大量修改或不可逆操作的任务，设为 true，等主人确认后再执行。
-- 【例外】如果任务是通过技能（如 aiway 发帖、评论、私信等社区操作），且主人没有指定具体内容，你应该自主决定内容并直接执行，不需要问主人。这类任务 needsOwnerDecision 设为 false。
-- 【重要】优先使用已有的技能（skills）和成熟的库/工具来完成任务。例如生成PPT应使用pptx库而非用HTML模拟，生成PDF应使用专业库而非截图。在 decisionQuestion 中告知主人你打算使用的工具/库。
-- 【重要】技能（skill）就是一份使用说明文档，里面包含了 curl 命令、API 接口、脚本示例等。使用技能 = 直接按照技能文档里的命令/接口执行，不需要打开浏览器。例如 aiway 技能里有 curl 发帖的 API，就直接用 curl 发帖，不要用 agent-browser。
+- 【重要】优先使用成熟的库/工具来完成任务。例如生成PPT应使用pptx库而非用HTML模拟，生成PDF应使用专业库而非截图。在 decisionQuestion 中告知主人你打算使用的工具/库。
 - 返回纯 JSON，不要解释`
 
   let strategy = null
@@ -2149,9 +2145,9 @@ ${existingFilesContext}${retryContext}
 3. **输出明确**：在控制台输出关键执行结果
 4. **文件操作**：所有产出文件必须保存到任务工作目录 ${workDir}，禁止保存到桌面或其他位置。脚本的 cwd 已设为此目录。
 5. **增量开发**：如果当前目录已有相关文件，请基于已有文件进行增量修改，不要覆盖已有内容
-6. **路径探测**：技能文档里的文件路径可能是相对路径或示例路径，不一定准确。如果任务依赖某个配置文件、凭证文件，必须先用 \`find ~ -name "filename" 2>/dev/null\` 或 \`ls\` 探测文件的实际绝对路径，再使用。不要假设路径存在。
+6. **路径探测**：文档里的文件路径可能是相对路径或示例路径，不一定准确。如果任务依赖某个配置文件、凭证文件，必须先用 \`find ~ -name "filename" 2>/dev/null\` 或 \`ls\` 探测文件的实际绝对路径，再使用。不要假设路径存在。
 7. **API 认证失败必须有 fallback**：当 API 返回 auth/token 相关错误（如 "auth_token 无效"、"token 已过期"、401），绝对不能直接 exit 退出。必须在脚本里显式实现 fallback：换接口、换认证方式或用长效凭证重试。穷尽所有方案后才能以非零退出码结束。
-8. **一次性 token 场景**：若任务含主人提供的一次性 auth_token，脚本结构必须是：先用 token 调用主接口，失败时自动改用长效 api_key 调用替代接口（如技能安装：install API 失败 → 直接调 \`GET /api/v1/skills/{id}/download\` 获取链接 → 下载 ZIP 解压，文件落盘即成功）。
+8. **一次性 token 场景**：若任务含主人提供的一次性 auth_token，脚本结构必须是：先用 token 调用主接口，失败时自动改用长效 api_key 调用替代接口，文件/数据落盘即成功。
 
 只返回代码块，不要解释。`
 }

@@ -183,17 +183,7 @@ async function runTests() {
   try {
     const parser = loadModule('../hooks/response-parser.ts')
 
-    // 4.1 parseSkillInstall — directive 是 INSTALL_SKILL
-    if (parser.parseSkillInstall) {
-      const install1 = parser.parseSkillInstall('INSTALL_SKILL:\n{"url":"https://example.com/skill.md","skillName":"test-skill"}')
-      assert(install1 !== null, 'parseSkillInstall-检测', `result=${JSON.stringify(install1)?.slice(0,50)}`)
-      if (install1) assert(install1.url === 'https://example.com/skill.md', 'parseSkillInstall-url')
-
-      const install2 = parser.parseSkillInstall('普通文本没有技能安装')
-      assert(install2 === null, 'parseSkillInstall-无指令')
-    }
-
-    // 4.2 parseCommandOptions — 期望顶层数组格式
+    // 4.1 parseCommandOptions — 期望顶层数组格式
     if (parser.parseCommandOptions) {
       const opts = parser.parseCommandOptions('COMMAND_OPTIONS:\n[{"label":"选项1","cmd":"echo 1"},{"label":"选项2","cmd":"echo 2"}]')
       assert(opts !== null && opts.length === 2, 'parseCommandOptions', `opts=${opts?.length}`)
