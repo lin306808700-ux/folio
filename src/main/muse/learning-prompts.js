@@ -1,9 +1,9 @@
 'use strict'
 
-// 学习图谱「活的书」提示词：章节撰写 / 圈选提问 / 下钻衍生。
+// 学习图谱「活的书」提示词：章节撰写 / 圈选提问 / 下钻衍生 / 验收出题 / 批改引导。
 // muse-handlers（交互式）与 learning-prefetch（后台预生成）共用，保证两条链路产出风格一致。
 
-function buildLearningPrompt({ kind, mapTitle, nodePath, nodeTitle, selection, question }) {
+function buildLearningPrompt({ kind, mapTitle, nodePath, nodeTitle, selection, question, content, answers, nodeDirectory }) {
   const context = `知识图谱：${mapTitle || ''}\n章节路径：${nodePath || nodeTitle}\n当前节点：${nodeTitle}`
   if (kind === 'content') {
     return [
@@ -21,7 +21,7 @@ function buildLearningPrompt({ kind, mapTitle, nodePath, nodeTitle, selection, q
   }
   if (kind === 'ask') {
     return [
-      '读者正在阅读一本技术书的某个章节，对圈选的内容有疑问，请像作者当面讲解一样回答。',
+      '读者正在阅读一本技术书的某章节，对圈选的内容有疑问，请像作者当面讲解一样回答。',
       '',
       context,
       '',
@@ -30,6 +30,43 @@ function buildLearningPrompt({ kind, mapTitle, nodePath, nodeTitle, selection, q
       `读者的问题：${question || '解释这段内容'}`,
       '',
       '要求：紧扣圈选片段讲透，必要时补充代码示例或类比；Markdown 格式；直接回答，不要客套话。',
+    ].join('\n')
+  }
+  // quiz：读完章节后的验收出题，考理解与应用，不给答案
+  if (kind === 'quiz') {
+    return [
+      '你是技术书的验收考官。读者刚读完下面这一章，请出 3 道验收题，检验他是否真正理解。',
+      '',
+      context,
+      '',
+      `章节内容：\n${String(content || '').slice(0, 6000)}`,
+      '',
+      '出题要求：',
+      '1. 考理解与应用而非背诵：问机制、为什么、权衡取舍；至少一道是场景判断题（给定具体场景让读者判断做法或结果）。',
+      '2. 每道题读者可用 1-3 句话作答，题目本身自含必要背景。',
+      '3. 不要给出答案或提示。',
+      '只输出 JSON 数组，不要任何其他文字或 markdown 围栏：',
+      '[{"question":"题目","keyPoint":"考察点（10字以内）"}]',
+    ].join('\n')
+  }
+  // grade：批改验收答案，并根据错题从书目目录中推荐阅读路径
+  if (kind === 'grade') {
+    return [
+      '你是技术书的验收考官。读者读完一章后完成了验收题，请依据章节内容逐题批改，并根据薄弱点给出本书内的阅读引导。',
+      '',
+      context,
+      '',
+      `章节内容：\n${String(content || '').slice(0, 6000)}`,
+      '',
+      `验收题与读者的作答：\n${answers || ''}`,
+      '',
+      `本书目录（引导只能从这里选章节）：\n${nodeDirectory || ''}`,
+      '',
+      '批改要求：',
+      '1. 以章节内容为事实依据逐题判定；方向对但关键机制缺失或不准确的判不通过，comment 必须点出具体缺了什么。',
+      '2. guidance：为每道未通过的题从目录推荐 1 个最相关章节，nodeTitle 必须是目录中原样的章节名，reason 说明它补的是哪个缺口；全部通过则 guidance 为空数组。',
+      '只输出 JSON，不要任何其他文字或 markdown 围栏：',
+      '{"results":[{"pass":true,"comment":"一句话点评"}],"guidance":[{"nodeTitle":"章节名","reason":"补什么缺口"}]}',
     ].join('\n')
   }
   // drill：基于圈选内容或节点本身衍生子知识点

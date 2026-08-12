@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Button, Card, Input, Tag } from 'antd'
 import {
-  ForkOutlined, HighlightOutlined, LoadingOutlined, ReadOutlined, StopOutlined, ThunderboltOutlined,
+  CheckCircleOutlined, CloseCircleOutlined, CompassOutlined, ForkOutlined, HighlightOutlined,
+  LoadingOutlined, ReadOutlined, StopOutlined, ThunderboltOutlined,
 } from '@ant-design/icons'
 import MarkdownRenderer from './MarkdownRenderer'
-import type { LearningNode, LearningQA } from '../types/electron'
+import type { LearningNode, LearningQA, LearningQuiz } from '../types/electron'
 
 interface LearningBookReaderProps {
   node: LearningNode
@@ -13,11 +14,15 @@ interface LearningBookReaderProps {
   nodePath: string
   // 后台预生成当前正在撰写的章节（用于展示「后台撰写中」与插队）
   prefetchCurrent: { mapId: string; nodeId: string; title: string } | null
+  // 全书目录（验收批改时供 AI 从中推荐阅读引导）
+  nodeDirectory: string
   onChanged: () => Promise<void>
   notify: (type: 'success' | 'error' | 'info', text: string) => void
+  // 跳转到引导推荐章节
+  onNavigate?: (nodeTitle: string) => void
 }
 
-type RequestKind = 'content' | 'ask' | 'drill'
+type RequestKind = 'content' | 'ask' | 'drill' | 'quiz' | 'grade'
 
 interface ActiveRequest {
   id: string
@@ -39,6 +44,20 @@ interface SelectionToolbar {
   text: string
 }
 
+interface QuizQuestion {
+  question: string
+  keyPoint: string
+}
+
+// 章节验收会话：出题 → 作答 → 批改 → 结果与引导
+interface QuizSession {
+  phase: 'answering' | 'grading' | 'result'
+  questions: QuizQuestion[]
+  answers: string[]
+  items?: { question: string; answer: string; pass: boolean; comment: string }[]
+  guidance?: { nodeTitle: string; reason: string }[]
+}
+
 const makeRequestId = () => `lrn_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
 
 // 宽容解析 drill 返回的子知识点 JSON（容忍 ```json 围栏与多余文字）
@@ -57,20 +76,64 @@ function parseDrillItems(raw: string): { title: string; summary: string }[] {
   }
 }
 
+// 宽容解析验收出题 JSON
+function parseQuizItems(raw: string): QuizQuestion[] {
+  const match = raw.match(/\[[\s\S]*\]/)
+  if (!match) return []
+  try {
+    const parsed = JSON.parse(match[0])
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter(item => item && typeof item.question === 'string' && item.question.trim())
+      .slice(0, 5)
+      .map(item => ({ question: item.question.trim().slice(0, 500), keyPoint: String(item.keyPoint || '').trim().slice(0, 30) }))
+  } catch {
+    return []
+  }
+}
+
+// 宽容解析批改结果 JSON
+function parseGradeResult(raw: string): { results: { pass: boolean; comment: string }[]; guidance: { nodeTitle: string; reason: string }[] } | null {
+  const match = raw.match(/\{[\s\S]*\}/)
+  if (!match) return null
+  try {
+    const parsed = JSON.parse(match[0])
+    if (!parsed || !Array.isArray(parsed.results)) return null
+    return {
+      results: parsed.results.slice(0, 10).map((r: { pass?: boolean; comment?: string }) => ({
+        pass: Boolean(r?.pass),
+        comment: String(r?.comment || '').slice(0, 500),
+      })),
+      guidance: (Array.isArray(parsed.guidance) ? parsed.guidance : [])
+        .filter((g: { nodeTitle?: string }) => g && typeof g.nodeTitle === 'string' && g.nodeTitle.trim())
+        .slice(0, 5)
+        .map((g: { nodeTitle: string; reason?: string }) => ({ nodeTitle: g.nodeTitle.trim().slice(0, 120), reason: String(g.reason || '').slice(0, 300) })),
+    }
+  } catch {
+    return null
+  }
+}
+
 /**
  * 学习图谱「活的书」阅读器：
  * - 章节正文（技术要点/讲解/代码实例）由 AI 按需撰写并持久化
  * - 圈选任意文字可提问或下钻衍生子知识点
  */
-const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, mapTitle, nodePath, prefetchCurrent, onChanged, notify }) => {
+const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, mapTitle, nodePath, prefetchCurrent, nodeDirectory, onChanged, notify, onNavigate }) => {
   const [contentDraft, setContentDraft] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
   const [drilling, setDrilling] = useState(false)
+  const [quizing, setQuizing] = useState(false)
   const [qaDraft, setQaDraft] = useState<QaDraft | null>(null)
   const [toolbar, setToolbar] = useState<SelectionToolbar | null>(null)
+  const [quiz, setQuizState] = useState<QuizSession | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
   const qaPanelRef = useRef<HTMLDivElement | null>(null)
+  const quizPanelRef = useRef<HTMLDivElement | null>(null)
   const reqRef = useRef<ActiveRequest | null>(null)
+  // 验收会话的最新镜像：onAiEnd 回调里读取，避免闭包过期
+  const quizRef = useRef<QuizSession | null>(null)
+  const setQuiz = (next: QuizSession | null) => { quizRef.current = next; setQuizState(next) }
   // 事件回调里读取最新上下文，避免闭包过期
   const ctxRef = useRef({ node, mapId, mapTitle, nodePath, onChanged, notify })
   ctxRef.current = { node, mapId, mapTitle, nodePath, onChanged, notify }
@@ -133,6 +196,57 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
         return
       }
 
+      // quiz：验收出题完成，进入作答阶段
+      if (req.kind === 'quiz') {
+        setQuizing(false)
+        const questions = parseQuizItems(data.content)
+        if (!data.success || questions.length === 0) {
+          ctx.notify('error', data.error || '出题失败')
+          return
+        }
+        setQuiz({ phase: 'answering', questions, answers: questions.map(() => '') })
+        setTimeout(() => quizPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60)
+        return
+      }
+
+      // grade：批改完成，持久化记录并按通过率流转状态
+      if (req.kind === 'grade') {
+        const session = quizRef.current
+        const graded = parseGradeResult(data.content)
+        if (!data.success || !graded || !session) {
+          ctx.notify('error', data.error || '批改失败')
+          if (session) setQuiz({ ...session, phase: 'answering' })
+          return
+        }
+        const items = session.questions.map((q, i) => ({
+          question: q.question,
+          answer: session.answers[i]?.trim() || '',
+          pass: Boolean(graded.results[i]?.pass),
+          comment: graded.results[i]?.comment || '',
+        }))
+        const passCount = items.filter(item => item.pass).length
+        const record: LearningQuiz = { items, guidance: graded.guidance, createdAt: new Date().toISOString() }
+        const result = await window.electronAPI.muse.learning.updateNode({
+          mapId: ctx.mapId, nodeId: ctx.node.id,
+          updates: {
+            quiz: [record, ...(ctx.node.quiz || [])],
+            status: passCount === items.length ? 'verified' : 'learning',
+          },
+        })
+        if (result.success) {
+          setQuiz({ ...session, phase: 'result', items, guidance: graded.guidance })
+          await ctx.onChanged()
+          ctx.notify(
+            passCount === items.length ? 'success' : 'info',
+            passCount === items.length ? '全部通过，本章已标记为已验收' : `通过 ${passCount}/${items.length}，建议按引导补读相关章节`,
+          )
+        } else {
+          ctx.notify('error', result.error || '批改结果保存失败')
+          setQuiz({ ...session, phase: 'answering' })
+        }
+        return
+      }
+
       // drill：解析子知识点并批量挂到当前节点下
       setDrilling(false)
       if (!data.success) {
@@ -157,7 +271,7 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
     return () => { offChunk(); offEnd() }
   }, [])
 
-  // 切换节点/卸载：中断进行中的生成
+  // 切换节点/卸载：中断进行中的生成，清理验收会话
   useEffect(() => {
     return () => {
       const req = reqRef.current
@@ -165,8 +279,11 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [node.id])
+  useEffect(() => {
+    setQuiz(null)
+  }, [node.id])
 
-  const startRequest = async (kind: RequestKind, extra: { selection?: string; question?: string } = {}) => {
+  const startRequest = async (kind: RequestKind, extra: { selection?: string; question?: string; content?: string; answers?: string; nodeDirectory?: string } = {}) => {
     const id = makeRequestId()
     reqRef.current = { id, kind, ...extra }
     const result = await window.electronAPI.muse.learning.aiAsk({
@@ -177,6 +294,9 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
       nodeTitle: node.title,
       selection: extra.selection,
       question: extra.question,
+      content: extra.content,
+      answers: extra.answers,
+      nodeDirectory: extra.nodeDirectory,
     })
     if (!result.success) {
       reqRef.current = null
@@ -210,6 +330,29 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
     setDrilling(true)
     const ok = await startRequest('drill', selection ? { selection } : {})
     if (!ok) setDrilling(false)
+  }
+
+  // 章节验收：读完本章后出 3 道题检验是否真正理解
+  const startQuiz = async () => {
+    if (!displayedContent || quiz) return
+    setQuizing(true)
+    const ok = await startRequest('quiz', { content: displayedContent })
+    if (!ok) setQuizing(false)
+  }
+
+  const submitQuiz = async () => {
+    const session = quizRef.current
+    if (!session || session.phase !== 'answering') return
+    if (!session.answers.some(answer => answer.trim())) {
+      notify('info', '至少作答一道题再提交')
+      return
+    }
+    const answersText = session.questions
+      .map((q, i) => `${i + 1}. 题目：${q.question}\n   作答：${session.answers[i]?.trim() || '（未作答）'}`)
+      .join('\n')
+    setQuiz({ ...session, phase: 'grading' })
+    const ok = await startRequest('grade', { content: displayedContent, answers: answersText, nodeDirectory })
+    if (!ok) setQuiz({ ...session, phase: 'answering' })
   }
 
   // 圈选后浮出「提问 / 下钻」工具条
@@ -277,6 +420,11 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
         <Button size="small" icon={<ForkOutlined />} loading={drilling} disabled={busy} onClick={() => startDrill()}>
           下钻子主题
         </Button>
+        {displayedContent && (
+          <Button size="small" icon={<CheckCircleOutlined />} loading={quizing} disabled={busy || quiz !== null} onClick={startQuiz}>
+            验收本章
+          </Button>
+        )}
         {busy && <Button size="small" danger icon={<StopOutlined />} onClick={stopCurrent}>停止</Button>}
         <span className="ml-auto flex items-center gap-1 text-[10px] text-text-faint">
           <HighlightOutlined />圈选任意文字即可提问或下钻
@@ -305,6 +453,86 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
             <div className="py-4 text-center text-xs text-text-muted">AI 正在撰写本章，约需 10-30 秒…</div>
           )}
           {displayedContent && <MarkdownRenderer content={displayedContent} role="assistant" />}
+        </div>
+      )}
+
+      {/* 章节验收面板：出题 → 作答 → 批改 → 引导 */}
+      {(quizing || quiz) && (
+        <div ref={quizPanelRef}>
+        <Card
+          size="small"
+          className="mt-3 bg-transparent"
+          title={<span className="flex items-center gap-2 text-xs"><CheckCircleOutlined className="text-violet-500" />章节验收{quiz?.phase === 'result' ? ` · 通过 ${quiz.items!.filter(i => i.pass).length}/${quiz.items!.length}` : ''}</span>}
+          extra={quiz?.phase === 'answering' && <Button type="text" size="small" onClick={() => setQuiz(null)}>放弃</Button>}
+        >
+          {quizing && !quiz && (
+            <div className="py-3 text-center text-xs text-text-muted">考官正在根据本章内容出验收题…</div>
+          )}
+          {quiz && quiz.phase !== 'result' && quiz.questions.map((question, index) => (
+            <div key={index} className="mb-3 border-b border-border-subtle/40 pb-3 last:mb-0 last:border-0 last:pb-0">
+              <div className="text-xs font-medium leading-5 text-text-primary">
+                {index + 1}. {question.question}
+                {question.keyPoint && <Tag className="ml-1.5 align-middle text-[10px]">{question.keyPoint}</Tag>}
+              </div>
+              <Input.TextArea
+                className="mt-2"
+                rows={2}
+                autoFocus={index === 0}
+                disabled={quiz.phase === 'grading'}
+                value={quiz.answers[index] || ''}
+                placeholder="你的回答（1-3 句话）"
+                onChange={event => {
+                  const value = event.target.value
+                  setQuiz(prev => prev ? { ...prev, answers: prev.answers.map((a, i) => (i === index ? value : a)) } : prev)
+                }}
+              />
+            </div>
+          ))}
+          {quiz?.phase === 'answering' && (
+            <div className="mt-2 flex justify-end">
+              <Button size="small" type="primary" onClick={submitQuiz}>提交批改</Button>
+            </div>
+          )}
+          {quiz?.phase === 'grading' && (
+            <div className="py-3 text-center text-xs text-text-muted">考官正在逐题批改…</div>
+          )}
+          {quiz?.phase === 'result' && quiz.items && (
+            <>
+              {quiz.items.map((item, index) => (
+                <div key={index} className="mb-3 flex items-start gap-1.5 last:mb-0">
+                  {item.pass
+                    ? <CheckCircleOutlined className="mt-0.5 flex-shrink-0 text-emerald-500" />
+                    : <CloseCircleOutlined className="mt-0.5 flex-shrink-0 text-rose-500" />}
+                  <div className="min-w-0">
+                    <div className="text-xs font-medium leading-5 text-text-primary">{index + 1}. {item.question}</div>
+                    {item.comment && <div className="mt-0.5 text-[11px] leading-5 text-text-muted">{item.comment}</div>}
+                  </div>
+                </div>
+              ))}
+              {quiz.guidance && quiz.guidance.length > 0 && (
+                <div className="mt-2 border-t border-border-subtle/50 pt-2">
+                  <div className="mb-1.5 flex items-center gap-1 text-[10px] font-semibold text-text-faint">
+                    <CompassOutlined className="text-amber-500" />推荐阅读路径（点击跳转）
+                  </div>
+                  {quiz.guidance.map((guide, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => onNavigate?.(guide.nodeTitle)}
+                      className="mb-1.5 flex w-full items-center gap-2 rounded-md border border-border-subtle/60 bg-fill-secondary/40 px-2.5 py-1.5 text-left transition-colors last:mb-0 hover:border-violet-400/60"
+                    >
+                      <span className="flex-shrink-0 text-xs font-medium text-text-primary">{guide.nodeTitle}</span>
+                      <span className="min-w-0 flex-1 truncate text-[10px] text-text-faint">{guide.reason}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="mt-3 flex justify-end">
+                <Button size="small" onClick={() => setQuiz(null)}>结束验收</Button>
+              </div>
+            </>
+          )}
+        </Card>
         </div>
       )}
 

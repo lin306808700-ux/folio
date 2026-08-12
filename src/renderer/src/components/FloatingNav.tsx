@@ -5,7 +5,6 @@ import { MessageCircle, History, ChevronsRight, ChevronsLeft, Sun, Moon, BookOpe
 import { isElectron } from '../utils/config'
 import { useTheme } from '../contexts/ThemeContext'
 import { MuseBrainLogo } from './MuseBrainLogo'
-import { useTouchFeedback } from '../hooks/useTouchFeedback'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import { SettingsModal } from './SettingsModal'
 
@@ -15,34 +14,20 @@ interface NavItem {
   icon: React.ComponentType<{ size?: number; className?: string }>
 }
 
-/**
- * 导航触点 — 每个导航项都是活体触点
- *
- * hover/press 有触感反馈（涟漪 + 粒子汇聚），
- * active 状态持续微呼吸（不是静态高亮）。
- */
 function FloatingNavItem({
   item,
   active,
   expanded,
-  unreadLetters,
 }: {
   item: NavItem
   active: boolean
   expanded: boolean
-  unreadLetters: number
 }) {
-  const { handlers } = useTouchFeedback({
-    ripple: true,
-    ambientResponse: true,
-  })
-
   return (
     <Link
       key={item.path}
       to={item.path}
       title={!expanded ? item.label : undefined}
-      {...handlers}
       className={`relative flex items-center rounded-xl text-sm transition-all active:scale-95 ${
         expanded ? 'gap-3 px-3 py-2.5' : 'justify-center px-0 py-2.5'
       } ${
@@ -51,20 +36,8 @@ function FloatingNavItem({
           : 'text-text-muted hover:text-text-primary hover:bg-text-primary/[0.06] hover:scale-105'
       }`}
     >
-      {/* 活体脉动 — active 状态持续微呼吸 */}
-      {active && (
-        <motion.div
-          className="absolute inset-0 rounded-xl bg-text-primary/[0.06]"
-          animate={{ opacity: [0.2, 0.5, 0.2] }}
-          transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut' }}
-          style={{ pointerEvents: 'none' }}
-        />
-      )}
       <span className="w-5 flex-shrink-0 flex items-center justify-center relative z-10">
         <item.icon size={18} />
-        {item.path === '/ideas' && unreadLetters > 0 && !expanded && (
-          <span className="absolute -top-1 -right-1 w-2 h-2 bg-rose-400 rounded-full" />
-        )}
       </span>
       <AnimatePresence>
         {expanded && (
@@ -79,26 +52,19 @@ function FloatingNavItem({
           </motion.span>
         )}
       </AnimatePresence>
-      {expanded && item.path === '/ideas' && unreadLetters > 0 && (
-        <span className="min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold bg-rose-500/90 text-white rounded-full px-1 relative z-10">
-          {unreadLetters > 99 ? '99+' : unreadLetters}
-        </span>
-      )}
     </Link>
   )
 }
 
 /**
- * 固定图标导航 · 意识体外壳
+ * 固定图标导航
  *
  * 左缘固定一列图标栏（始终可见），点击按钮手动展开/收起文字标签。
- * 符合「Muse 是意识体」的理念——导航轻巧通透，不抢空间。
  */
 export function FloatingNav() {
   const location = useLocation()
   const { theme, toggleTheme } = useTheme()
   const [expanded, setExpanded] = useState(false)
-  const [unreadLetters, setUnreadLetters] = useState(0)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [modelConfigured, setModelConfigured] = useState(true)
 
@@ -112,34 +78,7 @@ export function FloatingNav() {
     })
   }, [])
 
-  // 缪斯信箱未读数
-  useEffect(() => {
-    const loadUnread = async () => {
-      const count = await (window as any).electronAPI?.muse?.getUnreadCount?.()
-      if (typeof count === 'number') setUnreadLetters(count)
-    }
-    loadUnread()
-    const cleanupLetter = (window as any).electronAPI?.muse?.onNewLetter?.(() => loadUnread())
-    const cleanupCount = (window as any).electronAPI?.muse?.onUnreadCountUpdated?.((count: number) =>
-      setUnreadLetters(count)
-    )
-    return () => {
-      cleanupLetter?.()
-      cleanupCount?.()
-    }
-  }, [])
-
-  // 进入信箱页刷新未读
-  useEffect(() => {
-    if (location.pathname === '/ideas') {
-      ;(window as any).electronAPI?.muse?.getUnreadCount?.().then((count: number) => {
-        if (typeof count === 'number') setUnreadLetters(count)
-      })
-    }
-  }, [location.pathname])
-
   const navItems: NavItem[] = [
-    // 功能减法：只保留学习体验主链路，变更分析/信箱/作品入口已隐藏
     { path: '/chat', label: '对话', icon: MessageCircle },
     { path: '/learning', label: '学习图谱', icon: BookOpen },
     { path: '/history', label: '历史', icon: History },
@@ -157,11 +96,11 @@ export function FloatingNav() {
       {isElectron && <div className="drag-region h-10 flex-shrink-0" />}
 
       <div className={`flex-1 flex flex-col gap-1 ${expanded ? 'p-3' : 'px-2 py-3'} overflow-y-auto scroll-dark ${isElectron ? '' : 'pt-4'}`}>
-        {/* Logo — 点击回到 Muse 活体空间 */}
+        {/* Logo */}
         <div className={`flex items-center mb-3 ${expanded ? 'justify-center py-3' : 'justify-center py-2'}`}>
           <Link
-            to="/"
-            title="回到 Muse"
+            to="/chat"
+            title="回到对话"
             className={`flex-shrink-0 rounded-xl flex items-center justify-center overflow-hidden border border-border-subtle/50 bg-surface/[0.08] shadow-[0_0_24px_rgba(56,189,248,0.08)] transition-all duration-200 cursor-pointer hover:border-cyan-300/25 hover:bg-surface/[0.12] active:scale-95 dark:bg-white/[0.06] dark:shadow-[0_0_28px_rgba(56,189,248,0.16)] ${expanded ? 'w-[120px] h-[120px]' : 'w-10 h-10'}`}
           >
             <MuseBrainLogo
@@ -182,7 +121,6 @@ export function FloatingNav() {
             item={item}
             active={location.pathname === item.path}
             expanded={expanded}
-            unreadLetters={unreadLetters}
           />
         ))}
 

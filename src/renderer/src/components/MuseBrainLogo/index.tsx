@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { MuseBrainRenderer, MuseGlyphVariant, MuseState } from './renderer'
-import { onMuseInteraction } from '../muse-interaction-bus'
 
 interface MuseBrainLogoProps {
   state?: MuseState
@@ -15,7 +14,7 @@ interface MuseBrainLogoProps {
  * Muse Brain Logo — 3D WebGPU neural particle brain
  *
  * Replaces a static logo with a living, breathing consciousness indicator.
- * Listens to muse-interaction-bus for state changes automatically.
+ * State is controlled via props.
  * Falls back to a simple CSS glow orb if WebGPU is unavailable.
  */
 export function MuseBrainLogo({
@@ -29,19 +28,8 @@ export function MuseBrainLogo({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rendererRef = useRef<MuseBrainRenderer | null>(null)
   const [webgpuAvailable, setWebgpuAvailable] = useState(true)
-  const [busState, setBusState] = useState<MuseState>(initialState)
 
-  // Listen to interaction bus for state changes
-  useEffect(() => {
-    const cleanup = onMuseInteraction((event) => {
-      if (event.type === 'state_change') {
-        setBusState(event.state as MuseState)
-      }
-    })
-    return cleanup
-  }, [])
-
-  const activeState = propState ?? busState
+  const activeState = propState ?? initialState
 
   useEffect(() => {
     const canvas = canvasRef.current

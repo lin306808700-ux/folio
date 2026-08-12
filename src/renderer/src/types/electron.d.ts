@@ -82,9 +82,9 @@ export interface ElectronAPI {
       get: (mapId: string) => Promise<{ success: boolean; data?: LearningMap | null; error?: string }>
       create: (payload: { title: string; description?: string }) => Promise<{ success: boolean; data?: LearningMap; error?: string }>
       addNode: (payload: { mapId: string; parentId: string; title: string; summary?: string; status?: LearningNode['status'] }) => Promise<{ success: boolean; data?: LearningNode; error?: string }>
-      updateNode: (payload: { mapId: string; nodeId: string; updates: Partial<Pick<LearningNode, 'title' | 'status' | 'summary' | 'evidence' | 'nextStep' | 'content' | 'qa'>> }) => Promise<{ success: boolean; data?: LearningNode; error?: string }>
+      updateNode: (payload: { mapId: string; nodeId: string; updates: Partial<Pick<LearningNode, 'title' | 'status' | 'summary' | 'evidence' | 'nextStep' | 'content' | 'qa' | 'quiz'>> }) => Promise<{ success: boolean; data?: LearningNode; error?: string }>
       setCurrent: (payload: { mapId: string; nodeId: string }) => Promise<{ success: boolean; data?: LearningMap; error?: string }>
-      aiAsk: (payload: { requestId: string; kind: 'content' | 'ask' | 'drill'; mapTitle?: string; nodePath?: string; nodeTitle: string; selection?: string; question?: string }) => Promise<{ success: boolean; error?: string }>
+      aiAsk: (payload: { requestId: string; kind: 'content' | 'ask' | 'drill' | 'quiz' | 'grade'; mapTitle?: string; nodePath?: string; nodeTitle: string; selection?: string; question?: string; content?: string; answers?: string; nodeDirectory?: string }) => Promise<{ success: boolean; error?: string }>
       aiAbort: (requestId: string) => Promise<{ success: boolean }>
       onAiChunk: (callback: (data: { requestId: string; delta: string; content: string }) => void) => () => void
       onAiEnd: (callback: (data: { requestId: string; success: boolean; content: string; error?: string }) => void) => () => void
@@ -99,36 +99,12 @@ export interface ElectronAPI {
       workspaceFiles: string[]
       profileSections: string[]
     }>
-    morningReview: () => Promise<{ success: boolean; result?: any; error?: string }>
-    explore: (params?: { topic?: string }) => Promise<{ success: boolean; result?: any; error?: string }>
-    readJournal: (params: { filename: string }) => Promise<{ success: boolean; content?: string; error?: string }>
-    readInsight: (params: { filename: string }) => Promise<{ success: boolean; content?: string; error?: string }>
-    readProfile: (params: { section: string }) => Promise<{ success: boolean; content?: string; error?: string }>
-    // 目标管理
-    goal: {
-      create: (params: { title: string; description?: string; direction?: string }) => Promise<any>
-      list: () => Promise<any[]>
-      getActive: () => Promise<any[]>
-      update: (id: string, updates: any) => Promise<boolean>
-      delete: (id: string) => Promise<boolean>
-      complete: (id: string) => Promise<boolean>
-      addStep: (goalId: string, topic: string) => Promise<any>
-      progress: (id: string) => Promise<any>
-    }
     // 知识检索
     knowledge: {
       search: (keyword: string, limit?: number) => Promise<{ memories: any[]; insights: any[]; summaries: any[] }>
       consolidate: () => Promise<any>
       retrieveRelevant: (taskCommand: string, limit?: number) => Promise<{ experience: string }>
     }
-    // 自主等级
-    autonomy: {
-      getState: () => Promise<any>
-      getLevel: () => Promise<{ level: number }>
-      evaluate: () => Promise<any>
-    }
-    onNewLetter: (callback: (data: any) => void) => () => void
-    onUnreadCountUpdated: (callback: (count: number) => void) => () => void
     onTaskProgress: (callback: (data: { taskId: string; subtaskId?: string; status: string; message: string; current: number; total: number; error?: string; repairAttempts?: number }) => void) => () => void
   }
   workspace: {
@@ -226,6 +202,8 @@ export interface LearningNode {
   content?: string
   // 圈选提问沉淀的问答
   qa?: LearningQA[]
+  // 章节验收答题记录
+  quiz?: LearningQuiz[]
   createdAt: string
   updatedAt: string
 }
@@ -234,6 +212,12 @@ export interface LearningQA {
   question: string
   selection: string
   answer: string
+  createdAt: string
+}
+
+export interface LearningQuiz {
+  items: { question: string; answer: string; pass: boolean; comment: string }[]
+  guidance: { nodeTitle: string; reason: string }[]
   createdAt: string
 }
 

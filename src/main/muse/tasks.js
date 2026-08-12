@@ -158,18 +158,6 @@ function updateTaskStatus(taskId, updates) {
   
   if (cleanUpdates.status) {
     console.log('[Muse] 任务状态已更新:', taskId, cleanUpdates.status)
-
-    // 任务完成时异步发送钉钉通知（失败不通知，避免骚扰）
-    if (cleanUpdates.status === 'completed') {
-      setImmediate(() => {
-        try {
-          const dingtalk = require('./dingtalk')
-          dingtalk.notifyTaskCompleted(task).catch(e => console.warn('[DingTalk] 通知失败:', e.message))
-        } catch (e) {
-          // dingtalk 模块加载失败不影响主流程
-        }
-      })
-    }
   } else {
     console.log('[Muse] 任务字段已更新:', taskId, Object.keys(cleanUpdates).join(', '))
   }

@@ -4,14 +4,10 @@ const { ipcMain, shell } = require('electron')
 const path = require('path')
 const fs = require('fs')
 const museAgent = require('../muse-agent')
-const { Letters } = require('../database')
 const { WORKSPACE_DIR } = require('../muse/config')
 const staticServer = require('../muse/static-server')
-const { ARCHIVE_DIR } = require('../muse/archive')
 const artifactStore = require('../muse/artifact-store')
-const goals = require('../muse/goals')
 const knowledge = require('../muse/knowledge')
-const autonomy = require('../muse/autonomy')
 const learningMaps = require('../muse/learning-maps').store
 const learningPrefetch = require('../muse/learning-prefetch')
 const { callAIStream } = require('../../shared/ai-client')
@@ -90,21 +86,6 @@ function registerMuseHandlers(mainWindow) {
     if (controller) controller.abort()
     return { success: true }
   })
-  // 晊间回顾
-  ipcMain.handle('muse:morningReview', async () => {
-    return await museAgent.morningReview()
-  })
-
-  // 对话分析（后台静默执行，不阻塞主流程）
-  ipcMain.handle('muse:analyzeConversation', async (_event, { query, aiResponse }) => {
-    return await museAgent.analyzeConversation(query, aiResponse)
-  })
-
-  // 主动探索
-  ipcMain.handle('muse:explore', async (_event, { topic } = {}) => {
-    return await museAgent.proactiveExplore(topic)
-  })
-
   // 执行直接指令
   ipcMain.handle('muse:executeCommand', async (_event, { command } = {}) => {
     return await museAgent.executeCommand(command)
@@ -113,42 +94,6 @@ function registerMuseHandlers(mainWindow) {
   // 获取缪斯状态
   ipcMain.handle('muse:getStatus', async () => {
     return museAgent.getStatus()
-  })
-
-  // 读取日志
-  ipcMain.handle('muse:readJournal', async (_event, { filename }) => {
-    const fs = require('fs')
-    const path = require('path')
-    const filepath = path.join(museAgent.JOURNAL_DIR, filename)
-    try {
-      return { success: true, content: fs.readFileSync(filepath, 'utf8') }
-    } catch (err) {
-      return { success: false, error: err.message }
-    }
-  })
-
-  // 读取洞察报告
-  ipcMain.handle('muse:readInsight', async (_event, { filename }) => {
-    const fs = require('fs')
-    const path = require('path')
-    const filepath = path.join(museAgent.INSIGHTS_DIR, filename)
-    try {
-      return { success: true, content: fs.readFileSync(filepath, 'utf8') }
-    } catch (err) {
-      return { success: false, error: err.message }
-    }
-  })
-
-  // 读取主人画像
-  ipcMain.handle('muse:readProfile', async (_event, { section }) => {
-    const fs = require('fs')
-    const path = require('path')
-    const filepath = path.join(museAgent.PROFILE_DIR, `${section}.md`)
-    try {
-      return { success: true, content: fs.readFileSync(filepath, 'utf8') }
-    } catch (err) {
-      return { success: false, error: err.message }
-    }
   })
 
   // 打开工作空间目录
@@ -224,149 +169,6 @@ function registerMuseHandlers(mainWindow) {
     }
   })
 
-  // ========== 缪斯信箱 ==========
-
-  // 获取所有信封
-  ipcMain.handle('muse:getLetters', async () => {
-    return Letters.getAll()
-  })
-
-  // 获取未读数
-  ipcMain.handle('muse:getUnreadCount', async () => {
-    return Letters.getUnreadCount()
-  })
-
-  // 获取任务列表
-  ipcMain.handle('muse:getTasks', async () => {
-    return museAgent.loadTasks()
-  })
-
-  // 更新任务
-  ipcMain.handle('muse:updateTask', async (_event, { id, updates }) => {
-    return museAgent.updateTaskStatus(id, updates)
-  })
-
-  // 添加子任务
-  ipcMain.handle('muse:addSubtask', async (_event, { parentId, command, priority }) => {
-    const subtask = museAgent.addSubtask(parentId, command, { priority: priority || 'normal' })
-    return subtask ? { success: true, subtask } : { success: false, error: '父任务不存在或不允许添加子任务' }
-  })
-
-  // 获取归档任务列表
-  ipcMain.handle('muse:getArchivedTasks', async () => {
-    try {
-      if (!fs.existsSync(ARCHIVE_DIR)) return { success: true, tasks: [] }
-      
-      const allTasks = []
-      const files = fs.readdirSync(ARCHIVE_DIR)
-        .filter(f => f.startsWith('tasks-') && f.endsWith('.json'))
-        .sort((a, b) => b.localeCompare(a)) // 最新的在前
-
-      for (const file of files) {
-        try {
-          const data = JSON.parse(fs.readFileSync(path.join(ARCHIVE_DIR, file), 'utf8'))
-          allTasks.push(...data)
-        } catch {}
-      }
-
-      return { success: true, tasks: allTasks }
-    } catch (err) {
-      return { success: false, error: err.message, tasks: [] }
-    }
-  })
-
-  // 删除任务
-  ipcMain.handle('muse:deleteTask', async (_event, { id }) => {
-    const tasks = museAgent.loadTasks()
-    const task = tasks.find(t => t.id === id)
-    if (!task) return false
-    
-    let filteredTasks
-    // 如果是父任务，删除所有层级的子任务
-    if (!task.parentId) {
-      // 收集所有需要删除的 ID
-      const idsToDelete = new Set([id])
-      
-      // 递归收集所有子任务 ID
-      const collectSubtasks = (parentId) => {
-        tasks.filter(t => t.parentId === parentId).forEach(st => {
-          idsToDelete.add(st.id)
-          collectSubtasks(st.id) // 递归收集更深层次的子任务
-        })
-      }
-      collectSubtasks(id)
-      
-      // 过滤掉所有相关任务
-      filteredTasks = tasks.filter(t => !idsToDelete.has(t.id))
-    } else {
-      // 删除子任务（包括它的子任务）
-      const idsToDelete = new Set([id])
-      const collectSubtasks = (parentId) => {
-        tasks.filter(t => t.parentId === parentId).forEach(st => {
-          idsToDelete.add(st.id)
-          collectSubtasks(st.id)
-        })
-      }
-      collectSubtasks(id)
-      filteredTasks = tasks.filter(t => !idsToDelete.has(t.id))
-    }
-    
-    // 使用 museAgent 的路径保存
-    const fs = require('fs')
-    const path = require('path')
-    const tasksFile = path.join(process.env.HOME, '.folio/muse/tasks.json')
-    fs.writeFileSync(tasksFile, JSON.stringify(filteredTasks, null, 2))
-    
-    return true
-  })
-
-  // 暂停心跳
-  ipcMain.handle('muse:pauseHeartbeat', async () => {
-    return museAgent.pauseHeartbeat()
-  })
-
-  // 重启心跳
-  ipcMain.handle('muse:restartHeartbeat', async () => {
-    return museAgent.restartHeartbeat()
-  })
-
-  // 获取心跳状态
-  ipcMain.handle('muse:getHeartbeatStatus', async () => {
-    return museAgent.getHeartbeatStatus()
-  })
-
-  // 标记已读
-  ipcMain.handle('muse:markRead', async (_event, { id }) => {
-    const result = Letters.markRead(id)
-    
-    // 推送未读数更新事件
-    if (_mainWindow && !_mainWindow.isDestroyed()) {
-      const unreadCount = Letters.getUnreadCount()
-      _mainWindow.webContents.send('muse:unreadCountUpdated', unreadCount)
-    }
-    
-    return result
-  })
-
-  // 主人回复信件
-  ipcMain.handle('muse:replyLetter', async (_event, { id, content }) => {
-    const letter = Letters.reply(id, content)
-    if (!letter) return { success: false, error: '信件不存在' }
-    // 触发 Muse 感知反馈闭环
-    setImmediate(() => {
-      museAgent.processReply(id, content).catch(err => {
-        console.warn('[Muse] 反馈处理异常:', err.message)
-      })
-    })
-    return { success: true, letter }
-  })
-
-
-  // 删除信封
-  ipcMain.handle('muse:deleteLetter', async (_event, { id }) => {
-    return Letters.delete(id)
-  })
-
   // ========== 创作产物 API ==========
   ipcMain.handle('artifacts:getRecent', async (_event, { limit } = {}) => {
     return artifactStore.getRecent(limit || 50)
@@ -378,39 +180,6 @@ function registerMuseHandlers(mainWindow) {
 
   ipcMain.handle('artifacts:getBySession', async (_event, { sessionId } = {}) => {
     return artifactStore.getBySession(sessionId || '')
-  })
-
-  // ========== 目标管理 API ==========
-  ipcMain.handle('muse:goal:create', async (_event, { title, description, direction }) => {
-    return goals.createGoal(title, description, direction)
-  })
-
-  ipcMain.handle('muse:goal:list', async () => {
-    return goals.loadGoals()
-  })
-
-  ipcMain.handle('muse:goal:getActive', async () => {
-    return goals.getActiveGoals()
-  })
-
-  ipcMain.handle('muse:goal:update', async (_event, { id, updates }) => {
-    return goals.updateGoal(id, updates)
-  })
-
-  ipcMain.handle('muse:goal:delete', async (_event, { id }) => {
-    return goals.deleteGoal(id)
-  })
-
-  ipcMain.handle('muse:goal:complete', async (_event, { id }) => {
-    return goals.completeGoal(id)
-  })
-
-  ipcMain.handle('muse:goal:addStep', async (_event, { goalId, topic }) => {
-    return goals.addExploreStep(goalId, topic)
-  })
-
-  ipcMain.handle('muse:goal:progress', async (_event, { id }) => {
-    return goals.getGoalProgress(id)
   })
 
   // ========== 知识检索 API ==========
@@ -427,39 +196,7 @@ function registerMuseHandlers(mainWindow) {
     return { experience: result }
   })
 
-  // ========== 自主等级 API ==========
-  ipcMain.handle('muse:autonomy:getState', async () => {
-    return autonomy.getState()
-  })
-
-  ipcMain.handle('muse:autonomy:getLevel', async () => {
-    return { level: autonomy.getLevel() }
-  })
-
-  ipcMain.handle('muse:autonomy:evaluate', async () => {
-    return autonomy.evaluateLevel()
-  })
-
   console.log('[Muse] IPC handlers 已注册')
 }
 
-/**
- * 应用启动时触发晨间回顾（延迟执行，不阻塞启动）
- */
-function triggerMorningReviewOnStartup() {
-  // 检查今天是否已经做过晨间回顾
-  const fs = require('fs')
-  const path = require('path')
-  const today = new Date().toISOString().slice(0, 10)
-  const morningJournal = path.join(museAgent.JOURNAL_DIR, `morning_${today}.md`)
-
-  if (fs.existsSync(morningJournal)) {
-    console.log('[Muse] 今日晨间回顾已完成，跳过')
-    return
-  }
-
-  // 晨间回顾默认关闭，需手动在 Muse 页面触发
-  console.log('[Muse] 晨间回顾自动触发已禁用')
-}
-
-module.exports = { registerMuseHandlers, triggerMorningReviewOnStartup }
+module.exports = { registerMuseHandlers }

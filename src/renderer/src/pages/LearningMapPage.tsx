@@ -106,6 +106,22 @@ export default function LearningMapPage() {
 
   const treeData = useMemo(() => (activeMap ? buildTree(activeMap.nodes) : []), [activeMap])
 
+  // 全书目录文本（验收批改时供 AI 从目录中推荐阅读引导）
+  const nodeDirectory = useMemo(() => {
+    if (!activeMap) return ''
+    const byParent = new Map<string | null, LearningNode[]>()
+    activeMap.nodes.forEach(node => byParent.set(node.parentId, [...(byParent.get(node.parentId) || []), node]))
+    const lines: string[] = []
+    const walk = (parentId: string | null, level: number) => {
+      for (const node of byParent.get(parentId) || []) {
+        lines.push(`${'  '.repeat(level)}- ${node.title}`)
+        walk(node.id, level + 1)
+      }
+    }
+    walk(null, 0)
+    return lines.join('\n')
+  }, [activeMap])
+
   const loadMaps = async (preferredMapId?: string, preferredNodeId?: string) => {
     if (!isElectron) {
       setLoading(false)
@@ -160,6 +176,18 @@ export default function LearningMapPage() {
 
   const openNode = (nodeId: string) => {
     setSelectedNodeId(nodeId)
+    setDrawerOpen(true)
+  }
+
+  // 验收引导跳转：按章节名定位节点（AI 推荐的 nodeTitle 限定来自本书目录）
+  const navigateToTitle = (title: string) => {
+    if (!activeMap) return
+    const target = activeMap.nodes.find(node => node.title === title)
+    if (!target) {
+      messageApi.info('未找到同名章节，请手动在目录中查找')
+      return
+    }
+    setSelectedNodeId(target.id)
     setDrawerOpen(true)
   }
 
@@ -481,8 +509,10 @@ export default function LearningMapPage() {
                 mapTitle={activeMap!.title}
                 nodePath={selectedPath.map(item => item.title).join(' > ')}
                 prefetchCurrent={prefetch?.current || null}
+                nodeDirectory={nodeDirectory}
                 onChanged={() => loadMaps(activeMap!.id, selectedNode.id)}
                 notify={(type, text) => messageApi[type](text)}
+                onNavigate={navigateToTitle}
               />
             </div>
 

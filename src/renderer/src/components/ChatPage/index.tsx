@@ -4,7 +4,6 @@ import { Virtuoso, VirtuosoHandle } from 'react-virtuoso'
 import { Sparkles, Eraser, Clock, Activity, Zap, ShieldCheck, Terminal as TerminalIcon, Square, Shield, Trash2, RefreshCw, X, ChevronsDown, FolderOpen, Play, Code2, Box, ChevronDown, ChevronRight, Minimize2, RotateCcw } from 'lucide-react'
 import { Terminal } from '../Terminal'
 import { MuseAvatar, MuseState } from '../MuseAvatar'
-import { emitMuseInteraction } from '../muse-interaction-bus'
 
 import { useSessionStatus } from './hooks/useSessionStatus'
 import { useInputHistory } from './hooks/useInputHistory'
@@ -124,7 +123,7 @@ export const ChatPage = () => {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const isElectron = typeof window !== 'undefined' && !!window.electronAPI
 
-  // 从 MuseSpace 键盘跳转过来时，聚焦输入框并填入首字符
+  // 从其他入口跳转过来时，聚焦输入框并填入首字符
   useEffect(() => {
     const initialKey = sessionStorage.getItem('muse_initial_key')
     if (initialKey) {
@@ -541,11 +540,6 @@ export const ChatPage = () => {
       case 'waiting': return '等你说话~'
       case 'idle': return '随时待命 ✦'
     }
-  }, [museState])
-
-  // Muse 状态变化 → 广播到全局意识海洋场（Muse→我 共振）
-  useEffect(() => {
-    emitMuseInteraction({ type: 'state_change', state: museState })
   }, [museState])
 
   // 任务队列数据（从 Muse 任务系统获取）

@@ -1,7 +1,6 @@
 import React, { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Send, X, ImageIcon, Quote } from 'lucide-react'
-import { emitMuseInteraction } from '../../muse-interaction-bus'
 import type { ImageAttachment, ChatRequestEnvelope } from '../types'
 import { detectTrigger, TriggerType } from '../hooks/useTriggerSearch'
 
@@ -188,8 +187,6 @@ export function ChatInput({
           onChange={e => {
             const value = e.target.value
             onInputChange(value)
-            // 用户敲键盘 → 意识海洋场泛起细微涟漪（我→Muse 共振）
-            emitMuseInteraction({ type: 'user_typing' })
 
             // 新触发器系统：基于光标位置检测 @/#//
             if (onTriggerInput) {
@@ -213,11 +210,6 @@ export function ChatInput({
           }}
           onKeyDown={onKeyDown}
           onPaste={handlePaste}
-          onFocus={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect()
-            emitMuseInteraction({ type: 'input_focus', rect: { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } })
-          }}
-          onBlur={() => emitMuseInteraction({ type: 'input_blur' })}
           rows={1}
           style={{ minHeight: '44px', maxHeight: '240px' }}
         />
@@ -250,7 +242,6 @@ export function ChatInput({
           <motion.button
             onClick={() => {
               if (!handleSendDisabled) {
-                emitMuseInteraction({ type: 'message_sent' })
                 setSendRipple(Date.now())
               }
               onSend()

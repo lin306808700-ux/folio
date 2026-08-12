@@ -28,6 +28,7 @@ function createLearningMapStore(filePath = LEARNING_MAPS_FILE) {
   }
 
   // 幂等播种：内置图谱按 id 判重，缺失才写入（用户删掉后不会复活）
+  // 已存在的内置图谱做节点级正文回填：本地无正文且种子有正文才补，不覆盖用户已有内容与问答
   // deprecatedIds：被新版替代的旧内置图谱，仅移除内置 id，不碰用户自建
   function seedBuiltinMaps(seeds, deprecatedIds = []) {
     if (!Array.isArray(seeds) || seeds.length === 0) return
@@ -38,11 +39,33 @@ function createLearningMapStore(filePath = LEARNING_MAPS_FILE) {
       console.log(`[Muse] 已移除废弃内置图谱: ${removed.map(m => m.title).join('、')}`)
     }
     const missing = seeds.filter(seed => !maps.some(map => map.id === seed.id))
-    if (missing.length === 0 && removed.length === 0) return
+    let backfilled = 0
+    for (const seed of seeds) {
+      const map = maps.find(m => m.id === seed.id)
+      if (!map || !Array.isArray(map.nodes)) continue
+      const seedNodes = new Map(seed.nodes.map(n => [n.id, n]))
+      for (const node of map.nodes) {
+        const seedNode = seedNodes.get(node.id)
+        if (seedNode && !(node.content && node.content.trim()) && seedNode.content) {
+          node.content = seedNode.content
+          backfilled += 1
+        }
+        seedNodes.delete(node.id)
+      }
+      // 种子新增的节点（下钻扩展过的结构更新）整体补入
+      if (seedNodes.size > 0) {
+        map.nodes.push(...seedNodes.values())
+        backfilled += seedNodes.size
+      }
+    }
+    if (missing.length === 0 && removed.length === 0 && backfilled === 0) return
     // 内置图谱排在用户图谱之后
     save([...maps, ...missing])
     if (missing.length > 0) {
       console.log(`[Muse] 已注入内置学习图谱: ${missing.map(m => m.title).join('、')}`)
+    }
+    if (backfilled > 0) {
+      console.log(`[Muse] 内置图谱正文回填 ${backfilled} 个节点`)
     }
   }
 
@@ -148,6 +171,25 @@ function createLearningMapStore(filePath = LEARNING_MAPS_FILE) {
           question: cleanText(item.question, 2000),
           selection: cleanText(item.selection, 2000),
           answer: cleanText(item.answer, 40000),
+          createdAt: typeof item.createdAt === 'string' ? item.createdAt : new Date().toISOString(),
+        }))
+    }
+    // 章节验收答题记录，只接受合法形状，上限 10 次
+    if (updates.quiz !== undefined) {
+      node.quiz = (Array.isArray(updates.quiz) ? updates.quiz : [])
+        .filter(item => item && Array.isArray(item.items) && item.items.length > 0)
+        .slice(0, 10)
+        .map(item => ({
+          items: item.items.slice(0, 10).map(q => ({
+            question: cleanText(q.question, 2000),
+            answer: cleanText(q.answer, 2000),
+            pass: Boolean(q.pass),
+            comment: cleanText(q.comment, 500),
+          })),
+          guidance: (Array.isArray(item.guidance) ? item.guidance : [])
+            .filter(g => g && typeof g.nodeTitle === 'string')
+            .slice(0, 5)
+            .map(g => ({ nodeTitle: cleanText(g.nodeTitle, 120), reason: cleanText(g.reason, 300) })),
           createdAt: typeof item.createdAt === 'string' ? item.createdAt : new Date().toISOString(),
         }))
     }

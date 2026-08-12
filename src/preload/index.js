@@ -267,38 +267,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       }
     },
     getStatus: () => ipcRenderer.invoke('muse:getStatus'),
-    morningReview: () => ipcRenderer.invoke('muse:morningReview'),
-    explore: (params) => ipcRenderer.invoke('muse:explore', params || {}),
     executeCommand: (params) => ipcRenderer.invoke('muse:executeCommand', params || {}),
-    readJournal: (params) => ipcRenderer.invoke('muse:readJournal', params),
-    readInsight: (params) => ipcRenderer.invoke('muse:readInsight', params),
-    readProfile: (params) => ipcRenderer.invoke('muse:readProfile', params),
     // 静态文件服务 URL
     staticServerUrl: 'http://localhost:8766',
     // 工作空间
     openWorkspace: () => ipcRenderer.invoke('muse:openWorkspace'),
     getWorkspaceFiles: () => ipcRenderer.invoke('muse:getWorkspaceFiles'),
-    // 缪斯信箱
-    getLetters: () => ipcRenderer.invoke('muse:getLetters'),
-    getUnreadCount: () => ipcRenderer.invoke('muse:getUnreadCount'),
-    markRead: (id) => ipcRenderer.invoke('muse:markRead', { id }),
-    replyLetter: (id, content) => ipcRenderer.invoke('muse:replyLetter', { id, content }),
-    deleteLetter: (id) => ipcRenderer.invoke('muse:deleteLetter', { id }),
-    // 任务管理
-    getTasks: () => ipcRenderer.invoke('muse:getTasks'),
-    updateTask: (id, updates) => ipcRenderer.invoke('muse:updateTask', { id, updates }),
-    deleteTask: (id) => ipcRenderer.invoke('muse:deleteTask', { id }),
-    addSubtask: (parentId, command, priority) => ipcRenderer.invoke('muse:addSubtask', { parentId, command, priority }),
-    getArchivedTasks: () => ipcRenderer.invoke('muse:getArchivedTasks'),
-    // 心跳控制
-    pauseHeartbeat: () => ipcRenderer.invoke('muse:pauseHeartbeat'),
-    restartHeartbeat: () => ipcRenderer.invoke('muse:restartHeartbeat'),
-    getHeartbeatStatus: () => ipcRenderer.invoke('muse:getHeartbeatStatus'),
-    onNewLetter: (callback) => {
-      const sub = (_, data) => callback(data)
-      ipcRenderer.on('muse:newLetter', sub)
-      return () => ipcRenderer.removeListener('muse:newLetter', sub)
-    },
     onTaskProgress: (callback) => {
       const sub = (_, data) => callback(data)
       ipcRenderer.on('muse:taskProgress', sub)
@@ -309,33 +283,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('muse:log', sub)
       return () => ipcRenderer.removeListener('muse:log', sub)
     },
-    onUnreadCountUpdated: (callback) => {
-      const sub = (_, count) => callback(count)
-      ipcRenderer.on('muse:unreadCountUpdated', sub)
-      return () => ipcRenderer.removeListener('muse:unreadCountUpdated', sub)
-    },
-    // ========== 目标管理 ==========
-    goal: {
-      create: (params) => ipcRenderer.invoke('muse:goal:create', params),
-      list: () => ipcRenderer.invoke('muse:goal:list'),
-      getActive: () => ipcRenderer.invoke('muse:goal:getActive'),
-      update: (id, updates) => ipcRenderer.invoke('muse:goal:update', { id, updates }),
-      delete: (id) => ipcRenderer.invoke('muse:goal:delete', { id }),
-      complete: (id) => ipcRenderer.invoke('muse:goal:complete', { id }),
-      addStep: (goalId, topic) => ipcRenderer.invoke('muse:goal:addStep', { goalId, topic }),
-      progress: (id) => ipcRenderer.invoke('muse:goal:progress', { id })
-    },
     // ========== 知识检索 ==========
     knowledge: {
       search: (keyword, limit) => ipcRenderer.invoke('muse:knowledge:search', { keyword, limit }),
       consolidate: () => ipcRenderer.invoke('muse:knowledge:consolidate'),
       retrieveRelevant: (taskCommand, limit) => ipcRenderer.invoke('muse:knowledge:retrieveRelevant', { taskCommand, limit })
-    },
-    // ========== 自主等级 ==========
-    autonomy: {
-      getState: () => ipcRenderer.invoke('muse:autonomy:getState'),
-      getLevel: () => ipcRenderer.invoke('muse:autonomy:getLevel'),
-      evaluate: () => ipcRenderer.invoke('muse:autonomy:evaluate')
     }
   },
 

@@ -56,9 +56,6 @@ const taskEngine = require('./task-engine')
 const museAgent = require('./muse-agent')
 const { startServer: startStaticServer } = require('./muse/static-server')
 // Python engine 已迁移到 Node.js react-engine，不再需要启动外部进程
-// 钉钉集成可选：通过 MUSE_DINGTALK_ENABLED=true 启用
-const _dingtalkEnabled = process.env.MUSE_DINGTALK_ENABLED === 'true'
-const dingtalkServer = _dingtalkEnabled ? require('./muse/dingtalk-server') : null
 
 // 功能减法：内置浏览器自动化（BrowserViewManager/browserTool）与变更分析（arch-designer）已下线
 
@@ -130,23 +127,10 @@ app.whenReady().then(async () => {
   // ReAct 引擎已内置于 Node.js，无需启动外部进程
   console.log('[Main] Node.js ReAct 引擎就绪')
 
-  // 缪斯智能体：注入窗口引用并启动心跳
+  // 缪斯智能体：注入窗口引用
   museAgent.init(mainWindow)
 
-  // 钉钉 Outgoing 机器人服务（可选）
-  if (_dingtalkEnabled && dingtalkServer) {
-    try {
-      dingtalkServer.startServer(mainWindow)
-    } catch (err) {
-      console.warn('[Main] 钉钉 Outgoing 服务启动失败:', err.message)
-    }
-  }
-  
-  // 功能减法：自主探索已隐藏，不再在启动时触发晨间回顾
-  // triggerMorningReviewOnStartup()
-  
-  // 心跳默认关闭，需在 Muse 页面手动开启
-  // museAgent.startHeartbeat()
+  // 心跳默认关闭，不随启动调度
 
   // 初始化语义缓存并启动定期清理
   try {
@@ -177,8 +161,6 @@ app.on('before-quit', () => {
   taskStateManager.flush()
   terminalManager.cleanup()
   museAgent.stopHeartbeat()
-  // engineLauncher 已移除（ReAct 内置于 Node.js）
-  if (dingtalkServer) dingtalkServer.stopServer()
   // 卸载插件系统
   pluginSystem.stopWatch()
   pluginSystem.unloadAll()

@@ -39,3 +39,6 @@ npm-debug.log*
 # Test
 coverage/
 .nyc_output/
+
+# Built-in learning content (local only, not published)
+src/main/muse/builtin-learning-maps.json

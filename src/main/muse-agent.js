@@ -19,10 +19,6 @@ const { executeCommand } = require('./muse/command')
 const { chunkedAnalyzeFile, isLargeFile } = require('./muse/chunk-analyzer')
 const { writeJournal, writeInsight, updateProfile, createInWorkspace, getStatus } = require('./muse/core')
 const { collectSyslog, readSyslog } = require('./muse/syslog')
-// 钉钉集成可选（通过 MUSE_DINGTALK_ENABLED=true 启用）
-const _dingtalkEnabled = process.env.MUSE_DINGTALK_ENABLED === 'true'
-const dingtalk = _dingtalkEnabled ? require('./muse/dingtalk') : {}
-const dingtalkServer = _dingtalkEnabled ? require('./muse/dingtalk-server') : {}
 
 // ========== 初始化 ==========
 
@@ -99,12 +95,6 @@ module.exports = {
   PROFILE_DIR,
   TASKS_FILE,
   
-  // 钉钉通知
-  dingtalk,
-
-  // 钉钉 Outgoing 服务
-  dingtalkServer,
-
   // Prompt
   SOUL_PROMPT,
   parseMuseResponse

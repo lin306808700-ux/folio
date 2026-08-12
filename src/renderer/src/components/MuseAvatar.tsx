@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { motion, useMotionValue, useSpring, useReducedMotion, useAnimationControls } from 'framer-motion'
-import { onMuseInteraction } from './muse-interaction-bus'
 
 export type MuseState = 'idle' | 'working' | 'outputting' | 'error' | 'waiting'
 
@@ -167,8 +166,6 @@ function useGazeTracking(state: MuseState, reduceMotion: boolean | null) {
   const rawY = useMotionValue(0)
   const pupilX = useSpring(rawX, { stiffness: 120, damping: 18 })
   const pupilY = useSpring(rawY, { stiffness: 120, damping: 18 })
-  // 锁定目标（输入框聚焦时为屏幕坐标），null 表示跟随鼠标
-  const lockTargetRef = useRef<{ x: number; y: number } | null>(null)
 
   const MAX_OFFSET = 2 // viewBox 单位
 
@@ -186,22 +183,7 @@ function useGazeTracking(state: MuseState, reduceMotion: boolean | null) {
     rawY.set((dy / distance) * MAX_OFFSET)
   }
 
-  // 订阅输入框聚焦/失焦，切换视线锁定
-  useEffect(() => {
-    if (reduceMotion) return
-    return onMuseInteraction((event) => {
-      if (event.type === 'input_focus') {
-        lockTargetRef.current = event.rect
-        aimAt(event.rect.x, event.rect.y)
-      } else if (event.type === 'input_blur') {
-        lockTargetRef.current = null
-      }
-    })
-    // aimAt 依赖 ref，稳定；忽略依赖告警
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reduceMotion])
-
-  // 跟随鼠标（未锁定时）
+  // 跟随鼠标
   useEffect(() => {
     if (reduceMotion || state === 'working') {
       rawX.set(0)
@@ -210,7 +192,6 @@ function useGazeTracking(state: MuseState, reduceMotion: boolean | null) {
     }
 
     function handleMouseMove(event: MouseEvent) {
-      if (lockTargetRef.current) return // 已锁定输入框，不跟随鼠标
       aimAt(event.clientX, event.clientY)
     }
 
@@ -222,23 +203,10 @@ function useGazeTracking(state: MuseState, reduceMotion: boolean | null) {
   return { pupilX, pupilY, containerRef }
 }
 
-/**
- * 点头：收到 message_sent 事件时，头部快速下点再回弹一次，表达"收到了"。
- */
+/** 点头动画控制器（预留，当前无触发源） */
 function useNod(reduceMotion: boolean | null) {
   const controls = useAnimationControls()
-
-  useEffect(() => {
-    if (reduceMotion) return
-    return onMuseInteraction((event) => {
-      if (event.type !== 'message_sent') return
-      controls.start({
-        y: [0, 4, -1, 0],
-        transition: { duration: 0.45, ease: 'easeOut', times: [0, 0.4, 0.7, 1] },
-      })
-    })
-  }, [reduceMotion, controls])
-
+  void reduceMotion
   return controls
 }
 

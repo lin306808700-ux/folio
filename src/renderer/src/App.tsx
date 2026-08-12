@@ -1,16 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { ConfigProvider, theme as antdTheme } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import ChatPageComponent from './components/ChatPage';
-import MuseSpace from './components/MuseSpace';
 import AICopilot from './components/AICopilot';
 import FloatingNav from './components/FloatingNav';
-import GlobalAmbient from './components/GlobalAmbient';
 import HistoryPage from './pages/HistoryPage';
 import LearningMapPage from './pages/LearningMapPage';
-// 功能减法：变更分析/信箱/作品/爬虫/伴侣演示入口已隐藏，页面文件保留待后续恢复
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { baseUrl, getAuthHeaders, isElectron } from './utils/config';
@@ -36,16 +33,14 @@ function AntdProvider({ children }: { children: React.ReactNode }) {
 const AppContent = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const isHome = location.pathname === '/';
   const noPaddingRoutes = ['/history', '/learning'];
   const mainPadding = noPaddingRoutes.includes(location.pathname) ? 'p-0' : 'p-4 pt-8';
 
-  // ESC 键一键回到首页
+  // ESC 键一键回到对话
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
-      // 已在首页，不处理
-      if (location.pathname === '/') return;
+      if (location.pathname === '/chat') return;
       // 有模态框打开时，让模态框优先处理
       if (document.querySelector('[role="dialog"], [data-modal], .modal')) return;
       // 焦点在输入框 / 可编辑区域时，不拦截（避免误触）
@@ -54,7 +49,7 @@ const AppContent = () => {
       if (activeEl?.getAttribute('contenteditable') === 'true') return;
 
       e.preventDefault();
-      navigate('/');
+      navigate('/chat');
     };
 
     window.addEventListener('keydown', handleKeyDown);
@@ -62,26 +57,16 @@ const AppContent = () => {
   }, [location.pathname, navigate]);
 
   return (
-    <>
-      {/* MuseSpace — 默认活体空间（logo 点击回到这里） */}
-      {isHome && (
-        <main className="flex-1 overflow-hidden">
-          <MuseSpace onSummonChat={() => navigate('/chat')} />
-        </main>
-      )}
-      {/* 其他路由（含对话） */}
-      {!isHome && (
-        <main className={`flex-1 overflow-hidden ${mainPadding}`}>
-          <ErrorBoundary level="section" regionName="页面">
-            <Routes>
-              <Route path="/chat" element={<ChatPage />} />
-              <Route path="/history" element={<HistoryPage />} />
-              <Route path="/learning" element={<LearningMapPage />} />
-            </Routes>
-          </ErrorBoundary>
-        </main>
-      )}
-    </>
+    <main className={`flex-1 overflow-hidden ${mainPadding}`}>
+      <ErrorBoundary level="section" regionName="页面">
+        <Routes>
+          <Route path="/" element={<Navigate to="/chat" replace />} />
+          <Route path="/chat" element={<ChatPage />} />
+          <Route path="/history" element={<HistoryPage />} />
+          <Route path="/learning" element={<LearningMapPage />} />
+        </Routes>
+      </ErrorBoundary>
+    </main>
   );
 };
 
@@ -101,9 +86,6 @@ const App = () => {
     <ThemeProvider>
     <AntdProvider>
     <div className="h-screen bg-base font-sans flex overflow-hidden relative">
-      {/* 意识体氛围背景 */}
-      <GlobalAmbient />
-
       {/* macOS 内容区拖拽区域 */}
       {isElectron && <div className="drag-region fixed top-0 left-0 right-0 h-7 z-40" />}
 
