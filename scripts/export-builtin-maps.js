@@ -10,7 +10,7 @@ const path = require('path')
 
 const SOURCE = path.join(process.env.HOME, '.folio/muse/learning-maps.json')
 const TARGET = path.join(__dirname, '../src/main/muse/builtin-learning-maps.json')
-const BUILTIN_IDS = ['learn_map_builtin_fe', 'learn_map_builtin_java']
+const BUILTIN_IDS = ['learn_map_builtin_fe', 'learn_map_builtin_java', 'learn_map_builtin_agent']
 
 const maps = JSON.parse(fs.readFileSync(SOURCE, 'utf8'))
 const exported = []
