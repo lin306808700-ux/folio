@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Button, Card, Input, Tag } from 'antd'
+import { Button, Card, Input, Modal, Tag } from 'antd'
 import {
   CheckCircleOutlined, CloseCircleOutlined, CompassOutlined, ForkOutlined, HighlightOutlined,
   LoadingOutlined, ReadOutlined, StopOutlined, ThunderboltOutlined,
@@ -154,6 +154,12 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
 
       if (req.kind === 'content') {
         setGenerating(false)
+        // 主动停止：丢弃流式草稿，恢复原文，避免误点重生覆盖既有正文
+        if (!data.success) {
+          setContentDraft(null)
+          ctx.notify('info', data.error || '已停止撰写')
+          return
+        }
         if (data.content && data.content.trim()) {
           const result = await window.electronAPI.muse.learning.updateNode({
             mapId: ctx.mapId, nodeId: ctx.node.id, updates: { content: data.content },
@@ -161,13 +167,13 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
           if (result.success) {
             setContentDraft(null)
             await ctx.onChanged()
-            ctx.notify('success', data.success ? '本章已写入书页' : '已停止，保留已生成部分')
+            ctx.notify('success', '本章已写入书页')
           } else {
             ctx.notify('error', result.error || '章节保存失败')
           }
         } else {
           setContentDraft(null)
-          ctx.notify(data.success ? 'info' : 'error', data.error || '未生成内容')
+          ctx.notify('error', data.error || '未生成内容')
         }
         return
       }
@@ -306,7 +312,7 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
     return true
   }
 
-  const generateContent = async () => {
+  const doGenerate = async () => {
     // 插队：若后台正在预生成其他章节，优先排入本章；若正在写本章则让位给手动请求
     window.electronAPI.muse.learning.prefetchBump(mapId, node.id).catch(() => {})
     setContentDraft('')
@@ -318,9 +324,42 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
     }
   }
 
+  const generateContent = () => {
+    if (generating) return
+    // 已有正文时二次确认，避免误点重新撰写覆盖既有章节
+    if (node.content && node.content.trim()) {
+      Modal.confirm({
+        title: '重新撰写本章？',
+        content: '本章已有正文，重新撰写完成后将覆盖现有内容，且不可恢复。',
+        okText: '重新撰写',
+        okButtonProps: { danger: true },
+        cancelText: '取消',
+        onOk: doGenerate,
+      })
+      return
+    }
+    doGenerate()
+  }
+
   const stopCurrent = () => {
     const req = reqRef.current
-    if (req) window.electronAPI.muse.learning.aiAbort(req.id)
+    if (!req) return
+    reqRef.current = null
+    window.electronAPI.muse.learning.aiAbort(req.id)
+    // 立即复位 UI：不等 aiEnd 事件（中断产物直接丢弃）
+    if (req.kind === 'content') {
+      setGenerating(false)
+      setContentDraft(null)
+    } else if (req.kind === 'ask') {
+      setQaDraft(prev => (prev ? { ...prev, streaming: false } : prev))
+    } else if (req.kind === 'drill') {
+      setDrilling(false)
+    } else if (req.kind === 'quiz') {
+      setQuizing(false)
+    } else if (req.kind === 'grade') {
+      const session = quizRef.current
+      if (session) setQuiz({ ...session, phase: 'answering' })
+    }
   }
 
   const startDrill = async (selection?: string) => {
@@ -449,8 +488,13 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
       {/* 章节正文 */}
       {(displayedContent || generating) && (
         <div ref={contentRef} className="learning-book mt-3 rounded-lg border border-border-subtle/60 px-4 py-3">
-          {generating && !displayedContent && (
-            <div className="py-4 text-center text-xs text-text-muted">AI 正在撰写本章，约需 10-30 秒…</div>
+          {generating && (
+            <div className="mb-2 flex items-center justify-between gap-3 rounded-md border border-sky-500/30 bg-sky-500/5 px-3 py-2">
+              <span className="flex items-center gap-2 text-xs text-text-muted">
+                <LoadingOutlined className="text-sky-500" />AI 正在撰写本章，约需 10-30 秒…
+              </span>
+              <Button size="small" danger icon={<StopOutlined />} onClick={stopCurrent}>停止撰写</Button>
+            </div>
           )}
           {displayedContent && <MarkdownRenderer content={displayedContent} role="assistant" />}
         </div>
