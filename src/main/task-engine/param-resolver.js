@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 /**
  * 参数解析器
  * 解析步骤参数中的变量引用（$stepId、属性访问、.map() 语法等）

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 const toolRegistry = require('./tools');
 const { callAI } = require('../../shared/ai-client');
 const errorHandler = require('./error-handler');

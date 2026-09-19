@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 import React from 'react'
 import { Play, Activity, Globe } from 'lucide-react'
 import { BrowserScreenshot } from '../BrowserScreenshot'

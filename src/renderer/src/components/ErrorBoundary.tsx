@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 import React, { Component, ErrorInfo } from 'react'
 import { AlertTriangle, RotateCcw, Copy, Check, ChevronDown } from 'lucide-react'
 

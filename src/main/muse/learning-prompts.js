@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 'use strict'
 
 // 学习图谱「活的书」提示词：章节撰写 / 圈选提问 / 下钻衍生 / 验收出题 / 批改引导。

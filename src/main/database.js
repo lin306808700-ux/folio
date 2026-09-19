@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 const fs = require('fs')
 const path = require('path')
 const { app } = require('electron')

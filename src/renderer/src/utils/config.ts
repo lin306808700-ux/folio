@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 // 配置常量和辅助函数
 
 export const ONEDAY_CONFIG = (window as any).ONEDAY_CONFIG || (window.parent as any)?.window?.ONEDAY_CONFIG;

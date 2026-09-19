@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 const { exec } = require('child_process');
 const util = require('util');
 const execAsync = util.promisify(exec);

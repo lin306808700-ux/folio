@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 'use strict'
 
 const { HEARTBEAT_INTERVAL, MAX_TASKS_ARCHIVE_DAYS, AI_TIMEOUT_SHORT, WAITING_REPLY_TIMEOUT } = require('./config')

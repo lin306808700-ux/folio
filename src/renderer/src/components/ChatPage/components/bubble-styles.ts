@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 import type { Message } from '../types'
 
 /** 根据消息类型和角色返回气泡容器的 className（深色意识体风格） */

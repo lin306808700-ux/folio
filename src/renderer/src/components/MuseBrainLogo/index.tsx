@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 import React, { useEffect, useRef, useState } from 'react'
 import { MuseBrainRenderer, MuseGlyphVariant, MuseState } from './renderer'
 

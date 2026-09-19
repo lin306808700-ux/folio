@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 /**
  * UI 交互逻辑自动化测试
  * 测试纯函数和数据流逻辑（无 DOM 依赖）

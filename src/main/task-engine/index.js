@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 /**
  * 任务执行引擎（精简版）
  * 保留 Executor + StateManager，供 self-check 使用

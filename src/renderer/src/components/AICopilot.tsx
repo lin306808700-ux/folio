@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { X, Loader2, Sparkles, ChevronRight } from 'lucide-react';

@@ -1,6 +1,6 @@
 # MCP Server 配置指南
 
-Muse Folio 实现了 [Model Context Protocol](https://modelcontextprotocol.io) Server，可以将 Muse 的工具能力暴露给 Claude Desktop、Cursor 等 MCP Client。
+Folio 实现了 [Model Context Protocol](https://modelcontextprotocol.io) Server，可以将 Muse 的工具能力暴露给 Claude Desktop、Cursor 等 MCP Client。
 
 ## 可用工具
 

@@ -16,8 +16,7 @@
     "dev:electron": "node scripts/launch-electron.js",
     "dev": "concurrently --kill-others-on-fail \"npm run dev:renderer\" \"wait-on http://localhost:3009 && npm run dev:electron\"",
     "start": "electron .",
-    "build": "npm run build:renderer && electron-builder",
-    "bak": "bash ./archive.sh"
+    "build": "npm run build:renderer && electron-builder"
   },
   "keywords": [
     "electron",

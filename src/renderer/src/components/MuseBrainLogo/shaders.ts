@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 /**
  * WGSL shaders for the Muse Brain Logo (WebGPU particle neural network)
  */

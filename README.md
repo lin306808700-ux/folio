@@ -174,12 +174,22 @@ folio/
 
 见 [ROADMAP.md](ROADMAP.md)。欢迎在 Issues 里提出你想让 Folio 写的第一本书。
 
+## 文档
+
+完整文档索引见 [docs/](docs/README.md)，包含架构设计、代码库地图、沙箱安全边界、MCP 接入与插件开发。
+
 ## 贡献
 
-阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 与 [AGENTS.md](AGENTS.md) 了解协作约定。提交前请跑 `npm run check`。
+阅读 [CONTRIBUTING.md](CONTRIBUTING.md) 了解协作约定，用 AI 辅助开发见 [AGENTS.md](AGENTS.md)；参与前请遵守 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。提交前请跑 `npm run check`。
+
+安全漏洞请按 [SECURITY.md](SECURITY.md) 私下报告，不要创建公开 Issue。版本变更见 [CHANGELOG.md](CHANGELOG.md)。
 
 如果 Folio 对你有用，**给个 Star ⭐ 是最好的支持** —— 它能让更多正在搭知识体系的人看到这个项目。
 
 ## License
 
-[Apache License 2.0](LICENSE) · Copyright 2026 changyuan.lcy
+[Apache License 2.0](LICENSE) · Copyright 2026 lin306808700-ux
+
+你可以自由使用、修改、分发本项目，包括商业用途与闭源衍生，只需保留版权声明与协议全文（并标注你做过的改动）。
+
+版权归属与第三方组件声明见 [NOTICE](NOTICE)。

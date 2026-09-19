@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 const { contextBridge, ipcRenderer } = require('electron')
 
 // 暴露 Electron API 到渲染进程

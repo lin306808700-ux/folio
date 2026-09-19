@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 /**
  * 任务执行器工具函数
  * 通用的条件评估和对象查询逻辑

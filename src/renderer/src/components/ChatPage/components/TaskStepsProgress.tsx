@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 import React, { useState } from 'react'
 import { CheckCircle, Loader2, XCircle, Circle, ListTodo, ChevronRight, ChevronDown } from 'lucide-react'
 

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 'use strict'
 
 // 学习图谱「活的书」后台预生成管线。

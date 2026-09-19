@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 import { useState, useEffect, useRef, useCallback } from 'react'
 import type { Message, ImageAttachment, ChatRequestEnvelope } from '../types'
 import { callAIStream } from '../utils'

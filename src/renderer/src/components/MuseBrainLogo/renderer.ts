@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 /**
  * Muse Brain Logo — WebGPU 3D neural particle renderer
  *

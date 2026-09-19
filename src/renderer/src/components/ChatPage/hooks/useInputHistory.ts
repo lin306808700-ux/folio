@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 import React, { useState, useRef } from 'react'
 
 export function useInputHistory(input: string, setInput: (v: string) => void, onSend?: () => void) {

@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 'use strict'
 
 // 从本地 ~/.folio/muse/learning-maps.json 导出已生成的内置图谱正文，

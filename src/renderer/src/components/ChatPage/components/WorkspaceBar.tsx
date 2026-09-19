@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 import React, { useState, useEffect, useCallback } from 'react'
 import { Box, Play, FolderOpen, Code2 } from 'lucide-react'
 

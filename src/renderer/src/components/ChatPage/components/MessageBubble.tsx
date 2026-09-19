@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 import React, { useRef } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import { CopyButton } from './CopyButton'

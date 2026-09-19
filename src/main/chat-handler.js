@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 'use strict'
 
 console.log('[ChatHandler] 模块加载 v2026-04-03 19:35')

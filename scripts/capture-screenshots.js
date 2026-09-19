@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 'use strict'
 
 // 通过 Chromium DevTools Protocol 驱动 Electron 渲染进程，采集 README 所需的界面截图。

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 import React, { useState, useRef, useMemo, useEffect } from 'react'
 import {
   Code2, FileImage, Globe, Shapes, FileText, BarChart2,

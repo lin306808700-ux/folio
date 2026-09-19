@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 /**
  * 语义化主题颜色通过 CSS 变量驱动（见 src/styles/index.css）。
  * 用 rgb(var(--xxx) / <alpha-value>) 让 Tailwind 透明度修饰符（如 bg-surface/[0.06]）依然可用。

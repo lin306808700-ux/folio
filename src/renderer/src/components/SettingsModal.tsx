@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 import React, { useEffect, useState } from 'react'
 import { Alert, Button, Form, Input, Modal, Segmented, Typography, message } from 'antd'
 import { KeyOutlined, SaveOutlined } from '@ant-design/icons'

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 import React from 'react'
 import { Terminal, AlertCircle } from 'lucide-react'
 import { Link } from 'react-router-dom'

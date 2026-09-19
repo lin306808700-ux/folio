@@ -1,8 +1,8 @@
-# Muse Folio 插件开发指南
+# Folio 插件开发指南
 
 ## 概述
 
-Muse Folio 插件系统允许社区开发者为 Muse Agent 扩展三种核心能力：
+Folio 插件系统允许社区开发者为 Muse Agent 扩展三种核心能力：
 
 1. **工具（Tools）**：注册自定义工具，供 ReAct 引擎作为可调用的 action
 2. **钩子（Hooks）**：在用户消息处理、上下文构建时注入逻辑

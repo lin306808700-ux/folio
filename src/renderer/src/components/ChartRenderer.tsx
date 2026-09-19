@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 /**
  * ChartRenderer — Markdown 表格自动图表化组件
  * 支持柱状图、折线图、饼图、条形图、组合图，可切换

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 

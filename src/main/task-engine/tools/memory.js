@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 /**
  * 记忆操作工具
  * 所有记忆操作都是安全的（只新增/查询，不删除）

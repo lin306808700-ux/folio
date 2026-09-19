@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 import React, { useState, useEffect } from 'react';
 import { Clock, Loader2, User, Bot, X, MessageCircle } from 'lucide-react';
 import { isElectron } from '../utils/config';

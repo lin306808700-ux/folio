@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 /**
  * 架构图设计器工具
  * 在应用启动时预启动 dev server，用户请求时直接在侧边栏浏览器中打开

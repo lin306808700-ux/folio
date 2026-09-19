@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 import React, { useState, useMemo } from 'react'
 import { Check, X, FileCode, ChevronDown, ChevronRight, Copy } from 'lucide-react'
 

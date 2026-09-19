@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 import React, { useState, useEffect, useRef } from 'react'
 import { Play, Pause, Edit2, Trash2, Check, X, RotateCcw, AlertCircle, SkipForward, Zap, ChevronDown, ChevronRight, MessageSquare, Send } from 'lucide-react'
 import type { TaskStep, TaskProgressData } from '../types'

@@ -1,4 +1,4 @@
-# Muse Folio 文档
+# Folio 文档
 
 ## 目录
 

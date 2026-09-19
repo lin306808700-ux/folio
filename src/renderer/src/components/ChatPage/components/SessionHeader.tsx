@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 import React, { useState, useEffect, useRef } from 'react'
 import { RotateCcw, Layers } from 'lucide-react'
 import { WorkspaceBar } from './WorkspaceBar'

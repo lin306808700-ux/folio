@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 /**
  * 预处理 SCRIPT_BLOCK 内容：将裸露的 JSON 文本包裹为 Markdown 代码块，
  * 使流式输出过程中和解析失败时都能被 MarkdownRenderer 格式化渲染。

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 
 module.exports = {
   app: { getPath: (name) => '/var/folders/_x/kkd3_hps61l8_83qvrmd3n4h0000gp/T', isReady: () => true, getName: () => 'test' },

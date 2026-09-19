@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 // AI 调用逻辑
 export async function callAI(
   userInput: string,

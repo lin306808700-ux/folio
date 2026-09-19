@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 /**
  * 命令风险模式库 + 安全白名单/黑名单
  * 纯数据模块，供 CommandSafetyAnalyzer 使用

@@ -1,6 +1,6 @@
-# Contributing to Muse Folio
+# Contributing to Folio
 
-感谢你愿意参与 Muse Folio。项目仍在建立公开协作流程，当前最需要的是可复现问题、测试、文档和跨平台验证。
+感谢你愿意参与 Folio。项目仍在建立公开协作流程，当前最需要的是可复现问题、测试、文档和跨平台验证。
 
 ## 开始之前
 
@@ -52,3 +52,19 @@ npm run check
 - `help wanted`：维护者确认方向并欢迎社区实现；
 - `security`：只用于已公开且不包含利用细节的问题；
 - `platform:macos`、`platform:windows`、`platform:linux`：平台相关问题。
+
+## 许可
+
+本项目采用 [Apache License 2.0](LICENSE) 授权。
+
+当你提交 Pull Request、补丁或以任何形式向本项目贡献代码时，即视为你同意
+该贡献同样按 Apache License 2.0 授权（即 inbound = outbound），并确认自己
+有权作出该授权 —— 该贡献为你原创，或所引用的第三方代码与本协议兼容。
+
+请注意：
+
+- 不要提交与 Apache License 2.0 不兼容的代码（例如仅以 GPL 授权的代码）。
+- 若贡献中包含来自其他项目的代码或素材，请在 PR 中注明来源与许可，便于维护者核对。
+- 提交信息与代码中不要引入无权授权的第三方内容。
+
+版权归属与第三方组件声明见 [NOTICE](NOTICE)。

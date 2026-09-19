@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 /**
  * TableParser — 从 Markdown 表格中检测数值列，推荐最佳图表类型
  * 移植自 markdown-visualizer 项目

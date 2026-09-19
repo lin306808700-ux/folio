@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 /**
  * AI 响应解析器
  * 从 AI 返回的文本中检测并提取命令选项等结构化数据

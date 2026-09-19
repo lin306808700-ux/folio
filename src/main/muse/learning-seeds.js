@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 'use strict'
 
 // 内置学习图谱：开箱即带完整正文的知识体系，新用户无需预生成即可直接阅读。

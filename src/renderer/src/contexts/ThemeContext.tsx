@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
 
 export type ThemeMode = 'light' | 'dark'

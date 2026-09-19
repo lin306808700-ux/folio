@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 import React, { useState, useEffect, useCallback } from 'react'
 import { RefreshCw, Play, X, CheckCircle, AlertCircle, Clock, Loader2, Ban } from 'lucide-react'
 

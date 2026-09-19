@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 const { app, BrowserWindow, ipcMain, shell } = require('electron')
 
 // 品牌迁移（必须在任何业务模块读写数据目录前执行）：

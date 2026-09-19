@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 lin306808700-ux
+
 import React, { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { MessageSquarePlus } from 'lucide-react'
