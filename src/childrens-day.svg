@@ -1,0 +1,316 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+  <defs>
+    <!-- 天空渐变 -->
+    <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#87CEEB"/>
+      <stop offset="100%" stop-color="#E0F4FF"/>
+    </linearGradient>
+    <!-- 草地渐变 -->
+    <linearGradient id="grassGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5DBB63"/>
+      <stop offset="100%" stop-color="#3A9E42"/>
+    </linearGradient>
+    <!-- 彩虹渐变（文字用） -->
+    <linearGradient id="rainbowGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#FF4444"/>
+      <stop offset="20%" stop-color="#FF8800"/>
+      <stop offset="40%" stop-color="#FFDD00"/>
+      <stop offset="60%" stop-color="#44BB44"/>
+      <stop offset="80%" stop-color="#4488FF"/>
+      <stop offset="100%" stop-color="#AA44FF"/>
+    </linearGradient>
+    <!-- 太阳光芒滤镜 -->
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- ===== 背景天空 ===== -->
+  <rect width="800" height="600" fill="url(#skyGrad)"/>
+
+  <!-- ===== 太阳（右上角） ===== -->
+  <g transform="translate(700, 80)">
+    <!-- 旋转光芒 -->
+    <g filter="url(#glow)">
+      <animateTransform attributeName="transform" type="rotate" from="0 0 0" to="360 0 0" dur="12s" repeatCount="indefinite"/>
+      <line x1="0" y1="-55" x2="0" y2="-42" stroke="#FFD700" stroke-width="4" stroke-linecap="round"/>
+      <line x1="0" y1="-55" x2="0" y2="-42" stroke="#FFD700" stroke-width="4" stroke-linecap="round" transform="rotate(30)"/>
+      <line x1="0" y1="-55" x2="0" y2="-42" stroke="#FFD700" stroke-width="4" stroke-linecap="round" transform="rotate(60)"/>
+      <line x1="0" y1="-55" x2="0" y2="-42" stroke="#FFD700" stroke-width="4" stroke-linecap="round" transform="rotate(90)"/>
+      <line x1="0" y1="-55" x2="0" y2="-42" stroke="#FFD700" stroke-width="4" stroke-linecap="round" transform="rotate(120)"/>
+      <line x1="0" y1="-55" x2="0" y2="-42" stroke="#FFD700" stroke-width="4" stroke-linecap="round" transform="rotate(150)"/>
+      <line x1="0" y1="-55" x2="0" y2="-42" stroke="#FFD700" stroke-width="4" stroke-linecap="round" transform="rotate(180)"/>
+      <line x1="0" y1="-55" x2="0" y2="-42" stroke="#FFD700" stroke-width="4" stroke-linecap="round" transform="rotate(210)"/>
+      <line x1="0" y1="-55" x2="0" y2="-42" stroke="#FFD700" stroke-width="4" stroke-linecap="round" transform="rotate(240)"/>
+      <line x1="0" y1="-55" x2="0" y2="-42" stroke="#FFD700" stroke-width="4" stroke-linecap="round" transform="rotate(270)"/>
+      <line x1="0" y1="-55" x2="0" y2="-42" stroke="#FFD700" stroke-width="4" stroke-linecap="round" transform="rotate(300)"/>
+      <line x1="0" y1="-55" x2="0" y2="-42" stroke="#FFD700" stroke-width="4" stroke-linecap="round" transform="rotate(330)"/>
+    </g>
+    <!-- 太阳圆盘 -->
+    <circle r="35" fill="#FFD700" stroke="#FFA500" stroke-width="3"/>
+    <!-- 太阳笑脸 -->
+    <circle cx="-10" cy="-8" r="4" fill="#FF8C00"/>
+    <circle cx="10" cy="-8" r="4" fill="#FF8C00"/>
+    <path d="M -12 8 Q 0 20 12 8" stroke="#FF8C00" stroke-width="3" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <!-- ===== 白云 ===== -->
+  <!-- 云1 -->
+  <g transform="translate(120, 70)" opacity="0.9">
+    <ellipse cx="0" cy="0" rx="45" ry="28" fill="white"/>
+    <ellipse cx="-30" cy="8" rx="30" ry="20" fill="white"/>
+    <ellipse cx="30" cy="8" rx="35" ry="22" fill="white"/>
+    <ellipse cx="0" cy="15" rx="50" ry="18" fill="white"/>
+  </g>
+  <!-- 云2 -->
+  <g transform="translate(380, 50)" opacity="0.85">
+    <ellipse cx="0" cy="0" rx="38" ry="22" fill="white"/>
+    <ellipse cx="-25" cy="8" rx="25" ry="16" fill="white"/>
+    <ellipse cx="25" cy="8" rx="28" ry="18" fill="white"/>
+    <ellipse cx="0" cy="14" rx="42" ry="15" fill="white"/>
+  </g>
+  <!-- 云3 -->
+  <g transform="translate(580, 90)" opacity="0.8">
+    <ellipse cx="0" cy="0" rx="32" ry="20" fill="white"/>
+    <ellipse cx="-20" cy="7" rx="22" ry="14" fill="white"/>
+    <ellipse cx="20" cy="7" rx="25" ry="16" fill="white"/>
+    <ellipse cx="0" cy="12" rx="36" ry="13" fill="white"/>
+  </g>
+
+  <!-- ===== 彩旗串（顶部横跨） ===== -->
+  <!-- 绳子 -->
+  <path d="M 0 30 Q 100 55 200 35 Q 300 15 400 40 Q 500 60 600 38 Q 700 18 800 42" stroke="#8B6914" stroke-width="2" fill="none"/>
+  <!-- 彩旗组（带摆动动画） -->
+  <g>
+    <animateTransform attributeName="transform" type="rotate" values="-2 400 35; 2 400 35; -2 400 35" dur="3s" repeatCount="indefinite"/>
+    <!-- 旗1 红 -->
+    <polygon points="40,28 55,28 47,52" fill="#FF4444" opacity="0.9"/>
+    <!-- 旗2 橙 -->
+    <polygon points="80,22 95,22 87,46" fill="#FF8800" opacity="0.9"/>
+    <!-- 旗3 黄 -->
+    <polygon points="130,32 145,32 137,56" fill="#FFD700" opacity="0.9"/>
+    <!-- 旗4 绿 -->
+    <polygon points="175,18 190,18 182,42" fill="#44BB44" opacity="0.9"/>
+    <!-- 旗5 蓝 -->
+    <polygon points="220,36 235,36 227,60" fill="#4488FF" opacity="0.9"/>
+    <!-- 旗6 紫 -->
+    <polygon points="265,22 280,22 272,46" fill="#AA44FF" opacity="0.9"/>
+    <!-- 旗7 红 -->
+    <polygon points="315,38 330,38 322,62" fill="#FF4444" opacity="0.9"/>
+    <!-- 旗8 橙 -->
+    <polygon points="360,20 375,20 367,44" fill="#FF8800" opacity="0.9"/>
+    <!-- 旗9 黄 -->
+    <polygon points="405,42 420,42 412,66" fill="#FFD700" opacity="0.9"/>
+    <!-- 旗10 绿 -->
+    <polygon points="450,24 465,24 457,48" fill="#44BB44" opacity="0.9"/>
+    <!-- 旗11 蓝 -->
+    <polygon points="500,38 515,38 507,62" fill="#4488FF" opacity="0.9"/>
+    <!-- 旗12 紫 -->
+    <polygon points="545,20 560,20 552,44" fill="#AA44FF" opacity="0.9"/>
+    <!-- 旗13 红 -->
+    <polygon points="595,36 610,36 602,60" fill="#FF4444" opacity="0.9"/>
+    <!-- 旗14 橙 -->
+    <polygon points="640,22 655,22 647,46" fill="#FF8800" opacity="0.9"/>
+    <!-- 旗15 黄 -->
+    <polygon points="685,38 700,38 692,62" fill="#FFD700" opacity="0.9"/>
+    <!-- 旗16 绿 -->
+    <polygon points="730,20 745,20 737,44" fill="#44BB44" opacity="0.9"/>
+    <!-- 旗17 蓝 -->
+    <polygon points="770,36 785,36 777,60" fill="#4488FF" opacity="0.9"/>
+  </g>
+
+  <!-- ===== 气球1（红色，左侧） ===== -->
+  <g>
+    <animateTransform attributeName="transform" type="translate" values="0,0; 0,-12; 0,0" dur="3.2s" repeatCount="indefinite" calcMode="spline" keySplines="0.45 0.05 0.55 0.95; 0.45 0.05 0.55 0.95"/>
+    <ellipse cx="160" cy="200" rx="28" ry="35" fill="#FF4444"/>
+    <ellipse cx="152" cy="190" rx="8" ry="6" fill="#FF8888" opacity="0.6"/>
+    <line x1="160" y1="235" x2="158" y2="290" stroke="#888" stroke-width="1.5"/>
+    <path d="M 158 290 Q 155 295 160 300" stroke="#888" stroke-width="1.5" fill="none"/>
+  </g>
+
+  <!-- ===== 气球2（黄色，中左） ===== -->
+  <g>
+    <animateTransform attributeName="transform" type="translate" values="0,0; 0,-15; 0,0" dur="2.8s" repeatCount="indefinite" calcMode="spline" keySplines="0.45 0.05 0.55 0.95; 0.45 0.05 0.55 0.95"/>
+    <ellipse cx="280" cy="185" rx="28" ry="35" fill="#FFD700"/>
+    <ellipse cx="272" cy="175" rx="8" ry="6" fill="#FFEE88" opacity="0.6"/>
+    <line x1="280" y1="220" x2="282" y2="275" stroke="#888" stroke-width="1.5"/>
+    <path d="M 282 275 Q 285 280 280 285" stroke="#888" stroke-width="1.5" fill="none"/>
+  </g>
+
+  <!-- ===== 气球3（绿色，中右） ===== -->
+  <g>
+    <animateTransform attributeName="transform" type="translate" values="0,0; 0,-10; 0,0" dur="3.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.45 0.05 0.55 0.95; 0.45 0.05 0.55 0.95"/>
+    <ellipse cx="530" cy="195" rx="28" ry="35" fill="#44BB44"/>
+    <ellipse cx="522" cy="185" rx="8" ry="6" fill="#88DD88" opacity="0.6"/>
+    <line x1="530" y1="230" x2="528" y2="285" stroke="#888" stroke-width="1.5"/>
+    <path d="M 528 285 Q 525 290 530 295" stroke="#888" stroke-width="1.5" fill="none"/>
+  </g>
+
+  <!-- ===== 气球4（紫色，右侧） ===== -->
+  <g>
+    <animateTransform attributeName="transform" type="translate" values="0,0; 0,-13; 0,0" dur="3.0s" repeatCount="indefinite" calcMode="spline" keySplines="0.45 0.05 0.55 0.95; 0.45 0.05 0.55 0.95"/>
+    <ellipse cx="650" cy="190" rx="28" ry="35" fill="#AA44FF"/>
+    <ellipse cx="642" cy="180" rx="8" ry="6" fill="#CC88FF" opacity="0.6"/>
+    <line x1="650" y1="225" x2="652" y2="280" stroke="#888" stroke-width="1.5"/>
+    <path d="M 652 280 Q 655 285 650 290" stroke="#888" stroke-width="1.5" fill="none"/>
+  </g>
+
+  <!-- ===== 草地 ===== -->
+  <ellipse cx="400" cy="600" rx="480" ry="120" fill="url(#grassGrad)"/>
+  <rect x="0" y="520" width="800" height="80" fill="#5DBB63"/>
+  <!-- 草地波浪顶部 -->
+  <path d="M 0 520 Q 50 505 100 518 Q 150 530 200 515 Q 250 500 300 516 Q 350 530 400 514 Q 450 500 500 516 Q 550 530 600 515 Q 650 502 700 518 Q 750 530 800 516 L 800 600 L 0 600 Z" fill="#5DBB63"/>
+
+  <!-- ===== 小花点缀 ===== -->
+  <!-- 花1 -->
+  <g transform="translate(60, 510)">
+    <circle cx="0" cy="0" r="5" fill="#FFD700"/>
+    <ellipse cx="0" cy="-9" rx="4" ry="6" fill="#FF88AA"/>
+    <ellipse cx="0" cy="9" rx="4" ry="6" fill="#FF88AA"/>
+    <ellipse cx="-9" cy="0" rx="6" ry="4" fill="#FF88AA"/>
+    <ellipse cx="9" cy="0" rx="6" ry="4" fill="#FF88AA"/>
+  </g>
+  <!-- 花2 -->
+  <g transform="translate(150, 525)">
+    <circle cx="0" cy="0" r="5" fill="#FFD700"/>
+    <ellipse cx="0" cy="-9" rx="4" ry="6" fill="#FF4488"/>
+    <ellipse cx="0" cy="9" rx="4" ry="6" fill="#FF4488"/>
+    <ellipse cx="-9" cy="0" rx="6" ry="4" fill="#FF4488"/>
+    <ellipse cx="9" cy="0" rx="6" ry="4" fill="#FF4488"/>
+  </g>
+  <!-- 花3 -->
+  <g transform="translate(350, 518)">
+    <circle cx="0" cy="0" r="5" fill="#FFD700"/>
+    <ellipse cx="0" cy="-9" rx="4" ry="6" fill="#FF88AA"/>
+    <ellipse cx="0" cy="9" rx="4" ry="6" fill="#FF88AA"/>
+    <ellipse cx="-9" cy="0" rx="6" ry="4" fill="#FF88AA"/>
+    <ellipse cx="9" cy="0" rx="6" ry="4" fill="#FF88AA"/>
+  </g>
+  <!-- 花4 -->
+  <g transform="translate(460, 522)">
+    <circle cx="0" cy="0" r="5" fill="#FFD700"/>
+    <ellipse cx="0" cy="-9" rx="4" ry="6" fill="#AA44FF"/>
+    <ellipse cx="0" cy="9" rx="4" ry="6" fill="#AA44FF"/>
+    <ellipse cx="-9" cy="0" rx="6" ry="4" fill="#AA44FF"/>
+    <ellipse cx="9" cy="0" rx="6" ry="4" fill="#AA44FF"/>
+  </g>
+  <!-- 花5 -->
+  <g transform="translate(620, 515)">
+    <circle cx="0" cy="0" r="5" fill="#FFD700"/>
+    <ellipse cx="0" cy="-9" rx="4" ry="6" fill="#FF4444"/>
+    <ellipse cx="0" cy="9" rx="4" ry="6" fill="#FF4444"/>
+    <ellipse cx="-9" cy="0" rx="6" ry="4" fill="#FF4444"/>
+    <ellipse cx="9" cy="0" rx="6" ry="4" fill="#FF4444"/>
+  </g>
+  <!-- 花6 -->
+  <g transform="translate(730, 520)">
+    <circle cx="0" cy="0" r="5" fill="#FFD700"/>
+    <ellipse cx="0" cy="-9" rx="4" ry="6" fill="#44BB44"/>
+    <ellipse cx="0" cy="9" rx="4" ry="6" fill="#44BB44"/>
+    <ellipse cx="-9" cy="0" rx="6" ry="4" fill="#44BB44"/>
+    <ellipse cx="9" cy="0" rx="6" ry="4" fill="#44BB44"/>
+  </g>
+  <!-- 小草茎 -->
+  <line x1="90" y1="520" x2="88" y2="505" stroke="#3A9E42" stroke-width="2"/>
+  <line x1="200" y1="518" x2="202" y2="503" stroke="#3A9E42" stroke-width="2"/>
+  <line x1="400" y1="520" x2="398" y2="505" stroke="#3A9E42" stroke-width="2"/>
+  <line x1="550" y1="518" x2="552" y2="503" stroke="#3A9E42" stroke-width="2"/>
+  <line x1="680" y1="520" x2="678" y2="505" stroke="#3A9E42" stroke-width="2"/>
+
+  <!-- ===== 卡通小朋友 - 女孩（左侧，手持气球） ===== -->
+  <g transform="translate(200, 340)">
+    <!-- 气球线（女孩手持） -->
+    <line x1="18" y1="-30" x2="20" y2="-80" stroke="#888" stroke-width="1.5"/>
+    <!-- 小气球（粉色） -->
+    <ellipse cx="20" cy="-95" rx="18" ry="22" fill="#FF88CC"/>
+    <ellipse cx="14" cy="-103" rx="5" ry="4" fill="#FFBBDD" opacity="0.7"/>
+    <!-- 身体 -->
+    <!-- 裙子 -->
+    <path d="M -22 60 Q -30 120 -10 130 Q 0 135 10 130 Q 30 120 22 60 Z" fill="#FF88AA"/>
+    <!-- 上衣 -->
+    <rect x="-20" y="20" width="40" height="45" rx="8" fill="#FF4488"/>
+    <!-- 头 -->
+    <circle cx="0" cy="0" r="28" fill="#FFDAB9"/>
+    <!-- 头发 -->
+    <path d="M -28 -5 Q -25 -35 0 -38 Q 25 -35 28 -5" fill="#8B4513"/>
+    <ellipse cx="-28" cy="5" rx="8" ry="18" fill="#8B4513"/>
+    <ellipse cx="28" cy="5" rx="8" ry="18" fill="#8B4513"/>
+    <!-- 发饰 -->
+    <circle cx="-20" cy="-20" r="6" fill="#FF4444"/>
+    <circle cx="20" cy="-20" r="6" fill="#FF4444"/>
+    <!-- 眼睛 -->
+    <ellipse cx="-10" cy="2" rx="6" ry="7" fill="white"/>
+    <ellipse cx="10" cy="2" rx="6" ry="7" fill="white"/>
+    <circle cx="-10" cy="4" r="4" fill="#333"/>
+    <circle cx="10" cy="4" r="4" fill="#333"/>
+    <circle cx="-8" cy="2" r="1.5" fill="white"/>
+    <circle cx="12" cy="2" r="1.5" fill="white"/>
+    <!-- 腮红 -->
+    <ellipse cx="-18" cy="12" rx="7" ry="5" fill="#FFB6C1" opacity="0.7"/>
+    <ellipse cx="18" cy="12" rx="7" ry="5" fill="#FFB6C1" opacity="0.7"/>
+    <!-- 嘴巴 -->
+    <path d="M -8 18 Q 0 26 8 18" stroke="#CC4466" stroke-width="2" fill="none" stroke-linecap="round"/>
+    <!-- 手臂 -->
+    <line x1="-20" y1="30" x2="-40" y2="60" stroke="#FFDAB9" stroke-width="10" stroke-linecap="round"/>
+    <line x1="20" y1="30" x2="18" y2="-25" stroke="#FFDAB9" stroke-width="10" stroke-linecap="round"/>
+    <!-- 腿 -->
+    <line x1="-10" y1="130" x2="-12" y2="175" stroke="#FFDAB9" stroke-width="10" stroke-linecap="round"/>
+    <line x1="10" y1="130" x2="12" y2="175" stroke="#FFDAB9" stroke-width="10" stroke-linecap="round"/>
+    <!-- 鞋子 -->
+    <ellipse cx="-12" cy="178" rx="12" ry="7" fill="#FF4488"/>
+    <ellipse cx="12" cy="178" rx="12" ry="7" fill="#FF4488"/>
+  </g>
+
+  <!-- ===== 卡通小朋友 - 男孩（右侧，跳跃姿势） ===== -->
+  <g transform="translate(580, 330)">
+    <!-- 身体 -->
+    <!-- 裤子 -->
+    <path d="M -18 65 L -22 130 L -5 130 L 0 90 L 5 130 L 22 130 L 18 65 Z" fill="#4488FF"/>
+    <!-- 上衣 -->
+    <rect x="-22" y="18" width="44" height="50" rx="8" fill="#FF8800"/>
+    <!-- 条纹 -->
+    <line x1="-22" y1="35" x2="22" y2="35" stroke="white" stroke-width="3" opacity="0.6"/>
+    <line x1="-22" y1="50" x2="22" y2="50" stroke="white" stroke-width="3" opacity="0.6"/>
+    <!-- 头 -->
+    <circle cx="0" cy="0" r="28" fill="#FFDAB9"/>
+    <!-- 头发 -->
+    <path d="M -28 -8 Q -20 -40 0 -38 Q 20 -40 28 -8" fill="#333"/>
+    <!-- 眼睛（开心眯眼） -->
+    <path d="M -16 2 Q -10 -4 -4 2" stroke="#333" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M 4 2 Q 10 -4 16 2" stroke="#333" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <!-- 腮红 -->
+    <ellipse cx="-18" cy="12" rx="7" ry="5" fill="#FFB6C1" opacity="0.7"/>
+    <ellipse cx="18" cy="12" rx="7" ry="5" fill="#FFB6C1" opacity="0.7"/>
+    <!-- 嘴巴（大笑） -->
+    <path d="M -10 16 Q 0 28 10 16" stroke="#CC4400" stroke-width="2.5" fill="#FF8888" stroke-linecap="round"/>
+    <!-- 手臂（张开跳跃） -->
+    <line x1="-22" y1="30" x2="-55" y2="10" stroke="#FFDAB9" stroke-width="10" stroke-linecap="round"/>
+    <line x1="22" y1="30" x2="55" y2="10" stroke="#FFDAB9" stroke-width="10" stroke-linecap="round"/>
+    <!-- 腿（跳跃弯曲） -->
+    <line x1="-10" y1="130" x2="-25" y2="168" stroke="#FFDAB9" stroke-width="10" stroke-linecap="round"/>
+    <line x1="10" y1="130" x2="25" y2="168" stroke="#FFDAB9" stroke-width="10" stroke-linecap="round"/>
+    <!-- 鞋子 -->
+    <ellipse cx="-25" cy="172" rx="14" ry="8" fill="#333"/>
+    <ellipse cx="25" cy="172" rx="14" ry="8" fill="#333"/>
+  </g>
+
+  <!-- ===== 「六一儿童节快乐」大字 ===== -->
+  <!-- 文字阴影 -->
+  <text x="402" y="472" text-anchor="middle" font-size="52" font-weight="bold" font-family="'Microsoft YaHei', 'PingFang SC', 'SimHei', sans-serif" fill="rgba(0,0,0,0.15)" letter-spacing="4">六一儿童节快乐</text>
+  <!-- 彩虹渐变文字 -->
+  <text x="400" y="468" text-anchor="middle" font-size="52" font-weight="bold" font-family="'Microsoft YaHei', 'PingFang SC', 'SimHei', sans-serif" fill="url(#rainbowGrad)" letter-spacing="4">六一儿童节快乐</text>
+  <!-- 文字描边增强可读性 -->
+  <text x="400" y="468" text-anchor="middle" font-size="52" font-weight="bold" font-family="'Microsoft YaHei', 'PingFang SC', 'SimHei', sans-serif" fill="none" stroke="white" stroke-width="3" stroke-linejoin="round" letter-spacing="4" paint-order="stroke">六一儿童节快乐</text>
+  <text x="400" y="468" text-anchor="middle" font-size="52" font-weight="bold" font-family="'Microsoft YaHei', 'PingFang SC', 'SimHei', sans-serif" fill="url(#rainbowGrad)" letter-spacing="4" paint-order="stroke">六一儿童节快乐</text>
+
+  <!-- ===== 装饰星星 ===== -->
+  <text x="80" y="160" font-size="20" fill="#FFD700" opacity="0.8">★</text>
+  <text x="720" y="200" font-size="16" fill="#FFD700" opacity="0.7">★</text>
+  <text x="340" y="130" font-size="14" fill="#FFD700" opacity="0.6">✦</text>
+  <text x="480" y="155" font-size="18" fill="#FFD700" opacity="0.7">★</text>
+
+</svg>

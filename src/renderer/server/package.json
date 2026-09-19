@@ -1,0 +1,19 @@
+{
+  "name": "web-claw-server",
+  "version": "1.1.2",
+  "description": "Core Matrix Backend Service",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "express-jwt": "^8.4.1",
+    "jwks-rsa": "^3.0.1",
+    "axios": "^1.6.2",
+    "swagger-ui-express": "^5.0.0",
+    "swagger-jsdoc": "^6.2.8",
+    "cors": "^2.8.5",
+    "@supabase/postgrest-js": "^1.9.1"
+  }
+}
