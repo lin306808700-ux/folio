@@ -242,9 +242,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   muse: {
     learning: {
       list: () => ipcRenderer.invoke('muse:learning:list'),
+      listMeta: () => ipcRenderer.invoke('muse:learning:listMeta'),
       get: (mapId) => ipcRenderer.invoke('muse:learning:get', { mapId }),
+      getNode: (mapId, nodeId) => ipcRenderer.invoke('muse:learning:getNode', { mapId, nodeId }),
       create: (payload) => ipcRenderer.invoke('muse:learning:create', payload),
+      updateMap: (payload) => ipcRenderer.invoke('muse:learning:updateMap', payload),
+      deleteMap: (mapId) => ipcRenderer.invoke('muse:learning:deleteMap', { mapId }),
       addNode: (payload) => ipcRenderer.invoke('muse:learning:addNode', payload),
+      deleteNode: (payload) => ipcRenderer.invoke('muse:learning:deleteNode', payload),
       updateNode: (payload) => ipcRenderer.invoke('muse:learning:updateNode', payload),
       setCurrent: (payload) => ipcRenderer.invoke('muse:learning:setCurrent', payload),
       // 活的书：AI 流式写章节/圈选提问/下钻衍生
@@ -263,6 +268,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       // 后台预生成（预制章节）
       prefetchStatus: () => ipcRenderer.invoke('muse:learning:prefetchStatus'),
       prefetchBump: (mapId, nodeId) => ipcRenderer.invoke('muse:learning:prefetchBump', { mapId, nodeId }),
+      getSettings: () => ipcRenderer.invoke('muse:learning:getSettings'),
+      setSettings: (patch) => ipcRenderer.invoke('muse:learning:setSettings', patch),
       onPrefetchStatus: (callback) => {
         const subscription = (_, data) => callback(data)
         ipcRenderer.on('muse:learning:prefetchStatus', subscription)

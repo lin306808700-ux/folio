@@ -31,9 +31,15 @@ function registerMuseHandlers(mainWindow) {
   }
 
   ipcMain.handle('muse:learning:list', () => learningResponse(() => learningMaps.list()))
+  // 批量视图只回元数据，章节正文按需用 getNode 单取
+  ipcMain.handle('muse:learning:listMeta', () => learningResponse(() => learningMaps.listMeta()))
   ipcMain.handle('muse:learning:get', (_event, { mapId }) => learningResponse(() => learningMaps.get(mapId)))
+  ipcMain.handle('muse:learning:getNode', (_event, { mapId, nodeId }) => learningResponse(() => learningMaps.getNode(mapId, nodeId)))
   ipcMain.handle('muse:learning:create', (_event, payload) => learningResponse(() => learningMaps.create(payload)))
+  ipcMain.handle('muse:learning:updateMap', (_event, { mapId, updates }) => learningResponse(() => learningMaps.updateMap(mapId, updates)))
+  ipcMain.handle('muse:learning:deleteMap', (_event, { mapId }) => learningResponse(() => learningMaps.deleteMap(mapId)))
   ipcMain.handle('muse:learning:addNode', (_event, { mapId, ...payload }) => learningResponse(() => learningMaps.addNode(mapId, payload)))
+  ipcMain.handle('muse:learning:deleteNode', (_event, { mapId, nodeId }) => learningResponse(() => learningMaps.deleteNode(mapId, nodeId)))
   ipcMain.handle('muse:learning:updateNode', (_event, { mapId, nodeId, updates }) => learningResponse(() => learningMaps.updateNode(mapId, nodeId, updates)))
   ipcMain.handle('muse:learning:setCurrent', (_event, { mapId, nodeId }) => learningResponse(() => learningMaps.setCurrent(mapId, nodeId)))
 
@@ -49,6 +55,15 @@ function registerMuseHandlers(mainWindow) {
   ipcMain.handle('muse:learning:prefetchBump', (_event, { mapId, nodeId } = {}) => {
     learningPrefetch.bump(mapId, nodeId)
     return { success: true }
+  })
+
+  // 学习图谱本地偏好：后台预制可关闭（持续调模型的能力必须是用户可见、可关的）
+  const learningSettings = require('../muse/learning-settings')
+  ipcMain.handle('muse:learning:getSettings', () => ({ success: true, data: learningSettings.getSettings() }))
+  ipcMain.handle('muse:learning:setSettings', (_event, patch = {}) => {
+    const next = learningSettings.updateSettings(patch)
+    if (typeof patch.prefetchEnabled === 'boolean') learningPrefetch.setEnabled(patch.prefetchEnabled)
+    return { success: true, data: next }
   })
 
   ipcMain.handle('muse:learning:aiAsk', (_event, payload) => {

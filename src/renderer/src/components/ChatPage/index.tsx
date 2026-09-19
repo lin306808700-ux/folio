@@ -126,12 +126,17 @@ export const ChatPage = () => {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const isElectron = typeof window !== 'undefined' && !!window.electronAPI
 
-  // 从其他入口跳转过来时，聚焦输入框并填入首字符
+  // 从其他入口跳转过来时：填入并聚焦输入框；
+  // 若来源明确要求「直接开始」（学习图谱的继续对话），交给下面的 effect 自动发送
+  const pendingAutoSendRef = useRef<string | null>(null)
   useEffect(() => {
     const initialKey = sessionStorage.getItem('muse_initial_key')
+    const autoSend = sessionStorage.getItem('muse_initial_autosend') === '1'
     if (initialKey) {
       sessionStorage.removeItem('muse_initial_key')
-      setInput(initialKey)
+      sessionStorage.removeItem('muse_initial_autosend')
+      if (autoSend) pendingAutoSendRef.current = initialKey
+      else setInput(initialKey)
     }
     const timer = setTimeout(() => {
       const textarea = textareaRef.current
@@ -211,6 +216,19 @@ export const ChatPage = () => {
     resetSession: session.resetSession,
     recordInput: inputHistoryHook.recordInput
   })
+
+  // 学习图谱「继续对话」进来即开跑：用户点的是「开始继续学」，不该再要求手动发送一次
+  useEffect(() => {
+    const pending = pendingAutoSendRef.current
+    if (!isElectron || !pending || chat.loading) return
+    const timer = setTimeout(() => {
+      if (pendingAutoSendRef.current !== pending) return
+      pendingAutoSendRef.current = null
+      chat.doSend(pending)
+    }, 80)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chat.loading])
 
   const historyHook = useHistoryRecords(isElectron, chat.setMessages)
   // Plan 已移除 — 任务管理统一由 Muse 任务系统承载

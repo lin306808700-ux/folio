@@ -82,10 +82,15 @@ export interface ElectronAPI {
   muse: {
     learning: {
       list: () => Promise<{ success: boolean; data?: LearningMap[]; error?: string }>
+      listMeta: () => Promise<{ success: boolean; data?: LearningMapMeta[]; error?: string }>
       get: (mapId: string) => Promise<{ success: boolean; data?: LearningMap | null; error?: string }>
+      getNode: (mapId: string, nodeId: string) => Promise<{ success: boolean; data?: LearningNode; error?: string }>
       create: (payload: { title: string; description?: string }) => Promise<{ success: boolean; data?: LearningMap; error?: string }>
+      updateMap: (payload: { mapId: string; updates: { title?: string; description?: string } }) => Promise<{ success: boolean; data?: LearningMap; error?: string }>
+      deleteMap: (mapId: string) => Promise<{ success: boolean; data?: { id: string; title: string; removedNodes: number }; error?: string }>
       addNode: (payload: { mapId: string; parentId: string; title: string; summary?: string; status?: LearningNode['status'] }) => Promise<{ success: boolean; data?: LearningNode; error?: string }>
-      updateNode: (payload: { mapId: string; nodeId: string; updates: Partial<Pick<LearningNode, 'title' | 'status' | 'summary' | 'evidence' | 'nextStep' | 'content' | 'qa' | 'quiz'>> }) => Promise<{ success: boolean; data?: LearningNode; error?: string }>
+      deleteNode: (payload: { mapId: string; nodeId: string }) => Promise<{ success: boolean; data?: { map: LearningMap; removed: string[] }; error?: string }>
+      updateNode: (payload: { mapId: string; nodeId: string; updates: Partial<Pick<LearningNode, 'title' | 'status' | 'verifiedBy' | 'summary' | 'evidence' | 'nextStep' | 'content' | 'qa' | 'quiz'>> }) => Promise<{ success: boolean; data?: LearningNode; error?: string }>
       setCurrent: (payload: { mapId: string; nodeId: string }) => Promise<{ success: boolean; data?: LearningMap; error?: string }>
       aiAsk: (payload: { requestId: string; kind: 'content' | 'ask' | 'drill' | 'quiz' | 'grade'; mapTitle?: string; nodePath?: string; nodeTitle: string; selection?: string; question?: string; content?: string; answers?: string; nodeDirectory?: string }) => Promise<{ success: boolean; error?: string }>
       aiAbort: (requestId: string) => Promise<{ success: boolean }>
@@ -93,6 +98,8 @@ export interface ElectronAPI {
       onAiEnd: (callback: (data: { requestId: string; success: boolean; content: string; error?: string }) => void) => () => void
       prefetchStatus: () => Promise<{ success: boolean; data?: LearningPrefetchStatus }>
       prefetchBump: (mapId: string, nodeId: string) => Promise<{ success: boolean }>
+      getSettings: () => Promise<{ success: boolean; data?: LearningSettings; error?: string }>
+      setSettings: (patch: Partial<LearningSettings>) => Promise<{ success: boolean; data?: LearningSettings; error?: string }>
       onPrefetchStatus: (callback: (data: LearningPrefetchStatus & { lastDone?: { mapId: string; nodeId: string } }) => void) => () => void
     }
     getStatus: () => Promise<{
@@ -198,6 +205,8 @@ export interface LearningNode {
   parentId: string | null
   title: string
   status: 'unexplored' | 'learning' | 'understood' | 'verified'
+  // 「已验证」的来源：手动标记还是章节验收通过；离开已验证后清空
+  verifiedBy?: '' | 'manual' | 'quiz'
   summary: string
   evidence: string
   nextStep: string
@@ -211,6 +220,23 @@ export interface LearningNode {
   updatedAt: string
 }
 
+// 元数据视图：树/导图/看板用，不含章节正文
+export interface LearningNodeMeta {
+  id: string
+  parentId: string | null
+  title: string
+  status: LearningNode['status']
+  summary: string
+  nextStep: string
+  hasContent: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface LearningMapMeta extends Omit<LearningMap, 'nodes'> {
+  nodes: LearningNodeMeta[]
+}
+
 export interface LearningQA {
   question: string
   selection: string
@@ -220,7 +246,8 @@ export interface LearningQA {
 
 export interface LearningQuiz {
   items: { question: string; answer: string; pass: boolean; comment: string }[]
-  guidance: { nodeTitle: string; reason: string }[]
+  // nodeId 是权威定位（标题会被改重名）；nodeTitle 仅用于展示
+  guidance: { nodeId?: string; nodeTitle: string; reason: string }[]
   createdAt: string
 }
 
@@ -228,13 +255,22 @@ export interface LearningPrefetchStatus {
   active: boolean
   current: { mapId: string; nodeId: string; title: string } | null
   queueLeft: number
+  // 连续失败已放弃的章节数
+  stalled: number
+  enabled: boolean
   doneSession: number
+}
+
+export interface LearningSettings {
+  prefetchEnabled: boolean
 }
 
 export interface LearningMap {
   id: string
   title: string
   description: string
+  // 内置知识图谱（随应用注入，用户不可编辑来源）
+  builtIn?: boolean
   currentNodeId: string
   nodes: LearningNode[]
   createdAt: string

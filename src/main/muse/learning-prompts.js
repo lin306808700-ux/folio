@@ -63,13 +63,13 @@ function buildLearningPrompt({ kind, mapTitle, nodePath, nodeTitle, selection, q
       '',
       `验收题与读者的作答：\n${answers || ''}`,
       '',
-      `本书目录（引导只能从这里选章节）：\n${nodeDirectory || ''}`,
+      `本书目录（nodeId 与章节名，引导只能从这里选）：\n${nodeDirectory || ''}`,
       '',
       '批改要求：',
       '1. 以章节内容为事实依据逐题判定；方向对但关键机制缺失或不准确的判不通过，comment 必须点出具体缺了什么。',
-      '2. guidance：为每道未通过的题从目录推荐 1 个最相关章节，nodeTitle 必须是目录中原样的章节名，reason 说明它补的是哪个缺口；全部通过则 guidance 为空数组。',
+      '2. guidance：为每道未通过的题从目录推荐 1 个最相关章节；nodeId 必须和目录方括号里的 ID 完全一致，nodeTitle 用同一行的章节名，reason 说明它补的是哪个缺口；全部通过则 guidance 为空数组。',
       '只输出 JSON，不要任何其他文字或 markdown 围栏：',
-      '{"results":[{"pass":true,"comment":"一句话点评"}],"guidance":[{"nodeTitle":"章节名","reason":"补什么缺口"}]}',
+      '{"results":[{"pass":true,"comment":"一句话点评"}],"guidance":[{"nodeId":"目录中的 ID","nodeTitle":"章节名","reason":"补什么缺口"}]}',
     ].join('\n')
   }
   // drill：基于圈选内容或节点本身衍生子知识点

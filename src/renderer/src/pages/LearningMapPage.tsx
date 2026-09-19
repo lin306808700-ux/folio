@@ -1,58 +1,31 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 lin306808700-ux
 
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Button, Card, Drawer, Empty, Form, Input, Modal, Segmented, Select, Spin, Steps, Tag, Tree, message,
+  Button, Card, Drawer, Dropdown, Empty, Form, Input, Modal, Segmented, Select, Spin, Switch, Steps, Tag, Tree, message,
 } from 'antd'
 import {
-  AimOutlined, AppstoreOutlined, CheckCircleOutlined, CompassOutlined, EditOutlined, MessageOutlined,
-  PartitionOutlined, PlusOutlined, SaveOutlined, SyncOutlined,
+  AimOutlined, AppstoreOutlined, CheckCircleOutlined, CompassOutlined, DeleteOutlined, EditOutlined,
+  MessageOutlined, MoreOutlined, PartitionOutlined, PlusOutlined, SaveOutlined, SyncOutlined,
 } from '@ant-design/icons'
 import PageShell from '../components/PageShell'
 import LearningMindMap from '../components/LearningMindMap'
 import LearningBoard from '../components/LearningBoard'
 import LearningBookReader from '../components/LearningBookReader'
+import {
+  CURRENT_MARKER_COLOR, LEARNING_STATUS_META, LEARNING_STATUS_ORDER, countByStatus, statusMeta,
+  verifiedSourceLabel, type LearningStatus,
+} from '../components/learningStatus'
 import { isElectron } from '../utils/config'
+import type { LearningMapMeta, LearningNode, LearningNodeMeta } from '../types/electron'
 
-type LearningStatus = 'unexplored' | 'learning' | 'understood' | 'verified'
+interface DetailGuide { nodeId?: string; nodeTitle: string }
 
-interface LearningNode {
-  id: string
-  parentId: string | null
-  title: string
-  status: LearningStatus
-  summary: string
-  evidence: string
-  nextStep: string
-  content?: string
-  qa?: Array<{ question: string; selection: string; answer: string; createdAt: string }>
-  createdAt: string
-  updatedAt: string
-}
-
-interface LearningMap {
-  id: string
-  title: string
-  description: string
-  builtIn?: boolean
-  currentNodeId: string
-  nodes: LearningNode[]
-  createdAt: string
-  updatedAt: string
-}
-
-const statusMeta: Record<LearningStatus, { label: string; color: string; tag: string }> = {
-  unexplored: { label: '未开始', color: '#94a3b8', tag: 'default' },
-  learning: { label: '学习中', color: '#0ea5e9', tag: 'processing' },
-  understood: { label: '已理解', color: '#f59e0b', tag: 'warning' },
-  verified: { label: '已验证', color: '#10b981', tag: 'success' },
-}
-
-function getPath(nodes: LearningNode[], nodeId: string): LearningNode[] {
+function getPath(nodes: LearningNodeMeta[], nodeId: string): LearningNodeMeta[] {
   const byId = new Map(nodes.map(node => [node.id, node]))
-  const path: LearningNode[] = []
+  const path: LearningNodeMeta[] = []
   let cursor = byId.get(nodeId)
   const visited = new Set<string>()
   while (cursor && !visited.has(cursor.id)) {
@@ -66,13 +39,18 @@ function getPath(nodes: LearningNode[], nodeId: string): LearningNode[] {
 interface TreeNodeData {
   key: string
   title: string
-  node: LearningNode
+  node: LearningNodeMeta
   children?: TreeNodeData[]
 }
 
-function buildTree(nodes: LearningNode[]): TreeNodeData[] {
-  const grouped = new Map<string | null, LearningNode[]>()
-  nodes.forEach(node => grouped.set(node.parentId, [...(grouped.get(node.parentId) || []), node]))
+function buildTree(nodes: LearningNodeMeta[]): TreeNodeData[] {
+  const ids = new Set(nodes.map(node => node.id))
+  const grouped = new Map<string | null, LearningNodeMeta[]>()
+  nodes.forEach(node => {
+    // 父节点缺失的节点当根处理，避免它在树里凭空消失
+    const key = node.parentId && ids.has(node.parentId) ? node.parentId : null
+    grouped.set(key, [...(grouped.get(key) || []), node])
+  })
   const toData = (parentId: string | null): TreeNodeData[] =>
     (grouped.get(parentId) || []).map(node => ({
       key: node.id,
@@ -86,9 +64,12 @@ function buildTree(nodes: LearningNode[]): TreeNodeData[] {
 export default function LearningMapPage() {
   const navigate = useNavigate()
   const [messageApi, messageHolder] = message.useMessage()
-  const [maps, setMaps] = useState<LearningMap[]>([])
+  const [maps, setMaps] = useState<LearningMapMeta[]>([])
   const [activeMapId, setActiveMapId] = useState('')
   const [selectedNodeId, setSelectedNodeId] = useState('')
+  // 抽屉需要完整节点（正文/问答/验收记录），按需单取；列表只拿元数据
+  const [detailNode, setDetailNode] = useState<LearningNode | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editMode, setEditMode] = useState(false)
   const [viewMode, setViewMode] = useState<'mindmap' | 'board'>('mindmap')
@@ -96,28 +77,36 @@ export default function LearningMapPage() {
   const [saving, setSaving] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
-  const [prefetch, setPrefetch] = useState<{ active: boolean; current: { mapId: string; nodeId: string; title: string } | null; queueLeft: number; doneSession: number } | null>(null)
+  const [prefetchEnabled, setPrefetchEnabled] = useState(true)
+  const [prefetch, setPrefetch] = useState<{ active: boolean; current: { mapId: string; nodeId: string; title: string } | null; queueLeft: number; stalled: number; doneSession: number } | null>(null)
   const [createForm] = Form.useForm<{ title: string; description: string }>()
   const [addForm] = Form.useForm<{ title: string }>()
+  const [renameForm] = Form.useForm<{ title: string; description: string }>()
   const [nodeForm] = Form.useForm()
+  const [renameTarget, setRenameTarget] = useState<LearningMapMeta | null>(null)
 
   const activeMap = maps.find(map => map.id === activeMapId) || maps[0] || null
   const selectedNode = activeMap?.nodes.find(node => node.id === selectedNodeId) || null
   const currentNode = activeMap?.nodes.find(node => node.id === activeMap.currentNodeId) || null
   const selectedPath = activeMap && selectedNode ? getPath(activeMap.nodes, selectedNode.id) : []
   const currentPath = activeMap && currentNode ? getPath(activeMap.nodes, currentNode.id) : []
+  const counts = useMemo(() => countByStatus(activeMap?.nodes || []), [activeMap])
 
   const treeData = useMemo(() => (activeMap ? buildTree(activeMap.nodes) : []), [activeMap])
 
-  // 全书目录文本（验收批改时供 AI 从目录中推荐阅读引导）
+  // 全书目录（验收批改时供 AI 推荐阅读引导）：带 nodeId，章节名可能重名或被改
   const nodeDirectory = useMemo(() => {
     if (!activeMap) return ''
-    const byParent = new Map<string | null, LearningNode[]>()
-    activeMap.nodes.forEach(node => byParent.set(node.parentId, [...(byParent.get(node.parentId) || []), node]))
+    const ids = new Set(activeMap.nodes.map(node => node.id))
+    const byParent = new Map<string | null, LearningNodeMeta[]>()
+    activeMap.nodes.forEach(node => {
+      const key = node.parentId && ids.has(node.parentId) ? node.parentId : null
+      byParent.set(key, [...(byParent.get(key) || []), node])
+    })
     const lines: string[] = []
     const walk = (parentId: string | null, level: number) => {
       for (const node of byParent.get(parentId) || []) {
-        lines.push(`${'  '.repeat(level)}- ${node.title}`)
+        lines.push(`${'  '.repeat(level)}- [${node.id}] ${node.title}`)
         walk(node.id, level + 1)
       }
     }
@@ -125,24 +114,52 @@ export default function LearningMapPage() {
     return lines.join('\n')
   }, [activeMap])
 
-  const loadMaps = async (preferredMapId?: string, preferredNodeId?: string) => {
+  const loadMaps = useCallback(async (preferredMapId?: string, preferredNodeId?: string) => {
     if (!isElectron) {
       setLoading(false)
       return
     }
-    const result = await window.electronAPI.muse.learning.list()
+    const result = await window.electronAPI.muse.learning.listMeta()
     if (!result.success) throw new Error(result.error || '加载学习图谱失败')
     const nextMaps = result.data || []
     setMaps(nextMaps)
     const nextMap = nextMaps.find(map => map.id === (preferredMapId || activeMapId)) || nextMaps[0]
     setActiveMapId(nextMap?.id || '')
     setSelectedNodeId(preferredNodeId || nextMap?.currentNodeId || nextMap?.nodes[0]?.id || '')
-  }
+  }, [activeMapId])
+
+  const loadDetail = useCallback(async (mapId: string, nodeId: string) => {
+    if (!isElectron || !mapId || !nodeId) {
+      setDetailNode(null)
+      return
+    }
+    setDetailLoading(true)
+    try {
+      const result = await window.electronAPI.muse.learning.getNode(mapId, nodeId)
+      setDetailNode(result.success && result.data ? result.data : null)
+    } finally {
+      setDetailLoading(false)
+    }
+  }, [])
+
+  // 一次刷新：元数据 + 当前详情（写入后由阅读器/表单调用）
+  const refresh = useCallback(async (mapId?: string, nodeId?: string) => {
+    const targetMapId = mapId || activeMapId
+    const targetNodeId = nodeId || selectedNodeId
+    await loadMaps(targetMapId, targetNodeId)
+    if (targetNodeId) await loadDetail(targetMapId, targetNodeId)
+  }, [activeMapId, selectedNodeId, loadMaps, loadDetail])
 
   useEffect(() => {
     loadMaps().catch(cause => messageApi.error(cause instanceof Error ? cause.message : '加载失败')).finally(() => setLoading(false))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (!drawerOpen || !activeMap || !selectedNodeId) return
+    loadDetail(activeMap.id, selectedNodeId).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawerOpen, activeMap?.id, selectedNodeId])
 
   // 后台预生成状态：顶栏徽标展示；预制完成当前打开的章节时自动刷新
   const selectedNodeIdRef = useRef(selectedNodeId)
@@ -154,10 +171,13 @@ export default function LearningMapPage() {
     window.electronAPI.muse.learning.prefetchStatus().then(result => {
       if (result.success && result.data) setPrefetch(result.data)
     }).catch(() => {})
+    window.electronAPI.muse.learning.getSettings().then(result => {
+      if (result.success && result.data) setPrefetchEnabled(result.data.prefetchEnabled)
+    }).catch(() => {})
     const off = window.electronAPI.muse.learning.onPrefetchStatus(data => {
-      setPrefetch({ active: data.active, current: data.current, queueLeft: data.queueLeft, doneSession: data.doneSession })
+      setPrefetch({ active: data.active, current: data.current, queueLeft: data.queueLeft, stalled: data.stalled, doneSession: data.doneSession })
       if (data.lastDone && data.lastDone.nodeId === selectedNodeIdRef.current) {
-        loadMaps(activeMapIdRef.current || undefined, selectedNodeIdRef.current).catch(() => {})
+        refresh(activeMapIdRef.current || undefined, selectedNodeIdRef.current).catch(() => {})
       }
     })
     return off
@@ -166,32 +186,54 @@ export default function LearningMapPage() {
 
   // 打开节点详情抽屉时同步表单
   useEffect(() => {
-    if (!drawerOpen || !selectedNode) return
+    if (!drawerOpen || !detailNode) return
     nodeForm.setFieldsValue({
-      title: selectedNode.title,
-      status: selectedNode.status,
-      summary: selectedNode.summary || '',
-      evidence: selectedNode.evidence || '',
-      nextStep: selectedNode.nextStep || '',
+      title: detailNode.title,
+      status: detailNode.status,
+      summary: detailNode.summary || '',
+      evidence: detailNode.evidence || '',
+      nextStep: detailNode.nextStep || '',
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drawerOpen, selectedNode?.id, selectedNode?.updatedAt])
+  }, [drawerOpen, detailNode?.id, detailNode?.updatedAt])
 
-  const openNode = (nodeId: string) => {
+  // 切换节点：编辑态不跨节点残留；有未保存修改先确认，避免静默丢弃
+  const openNode = async (nodeId: string) => {
+    if (drawerOpen && editMode && selectedNodeId !== nodeId) {
+      if (nodeForm.isFieldsTouched()) {
+        const confirmed = await new Promise<boolean>(resolve => {
+          Modal.confirm({
+            title: '放弃未保存的修改？',
+            content: '当前节点还有未保存的编辑内容，切换节点会丢失这些修改。',
+            okText: '放弃修改',
+            okButtonProps: { danger: true },
+            cancelText: '留在当前节点',
+            onOk: () => resolve(true),
+            onCancel: () => resolve(false),
+          })
+        })
+        if (!confirmed) return
+      }
+      setEditMode(false)
+    }
+    if (selectedNodeId === nodeId) {
+      setDrawerOpen(true)
+      return
+    }
     setSelectedNodeId(nodeId)
     setDrawerOpen(true)
   }
 
-  // 验收引导跳转：按章节名定位节点（AI 推荐的 nodeTitle 限定来自本书目录）
-  const navigateToTitle = (title: string) => {
+  // 验收引导跳转：优先按 nodeId 定位，历史记录退回按章节名匹配
+  const navigateToGuide = async (guide: DetailGuide) => {
     if (!activeMap) return
-    const target = activeMap.nodes.find(node => node.title === title)
+    const target = (guide.nodeId && activeMap.nodes.find(node => node.id === guide.nodeId))
+      || activeMap.nodes.find(node => node.title === guide.nodeTitle)
     if (!target) {
-      messageApi.info('未找到同名章节，请手动在目录中查找')
+      messageApi.info('未找到该章节，请手动在目录中查找')
       return
     }
-    setSelectedNodeId(target.id)
-    setDrawerOpen(true)
+    await openNode(target.id)
   }
 
   const quickUpdateStatus = async (status: LearningStatus) => {
@@ -201,8 +243,8 @@ export default function LearningMapPage() {
       messageApi.error(result.error || '更新失败')
       return
     }
-    await loadMaps(activeMap.id, selectedNode.id)
-    messageApi.success(`已标记为「${statusMeta[status].label}」`)
+    await refresh(activeMap.id, selectedNode.id)
+    messageApi.success(`已标记为「${statusMeta(status).label}」`)
   }
 
   const createMap = async () => {
@@ -223,6 +265,47 @@ export default function LearningMapPage() {
     }
   }
 
+  const renameMap = async () => {
+    if (!renameTarget) return
+    const values = await renameForm.validateFields().catch(() => null)
+    if (!values) return
+    setSaving(true)
+    try {
+      const result = await window.electronAPI.muse.learning.updateMap({
+        mapId: renameTarget.id,
+        updates: { title: values.title.trim(), description: values.description || '' },
+      })
+      if (!result.success) throw new Error(result.error || '保存失败')
+      setRenameTarget(null)
+      await loadMaps(activeMapId, selectedNodeId)
+      messageApi.success('图谱信息已更新')
+    } catch (cause) {
+      messageApi.error(cause instanceof Error ? cause.message : '保存失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const deleteMap = (map: LearningMapMeta) => {
+    Modal.confirm({
+      title: `删除学习图谱「${map.title}」？`,
+      content: `其中 ${map.nodes.length} 个知识节点、已撰写的章节正文与问答记录都会一并删除，且不可恢复。`,
+      okText: '删除图谱',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: async () => {
+        const result = await window.electronAPI.muse.learning.deleteMap(map.id)
+        if (!result.success) {
+          messageApi.error(result.error || '删除失败')
+          return
+        }
+        setDrawerOpen(false)
+        await loadMaps()
+        messageApi.success('图谱已删除')
+      },
+    })
+  }
+
   const addNode = async () => {
     if (!activeMap || !selectedNode) return
     const values = await addForm.validateFields().catch(() => null)
@@ -233,13 +316,63 @@ export default function LearningMapPage() {
       if (!result.success || !result.data) throw new Error(result.error || '添加失败')
       setAddOpen(false)
       addForm.resetFields()
-      await loadMaps(activeMap.id, result.data.id)
+      await refresh(activeMap.id, result.data.id)
       messageApi.success('分支已添加')
     } catch (cause) {
       messageApi.error(cause instanceof Error ? cause.message : '添加失败')
     } finally {
       setSaving(false)
     }
+  }
+
+  const deleteNode = (nodeId: string) => {
+    if (!activeMap) return
+    const node = activeMap.nodes.find(item => item.id === nodeId)
+    if (!node) return
+    if (!node.parentId) {
+      Modal.confirm({
+        title: '这是图谱的根节点',
+        content: '根节点不能单独删除。如果要放弃整个图谱，请删除图谱本身。',
+        okText: '删除图谱',
+        okButtonProps: { danger: true },
+        cancelText: '取消',
+        onOk: async () => {
+          await window.electronAPI.muse.learning.deleteMap(activeMap.id)
+          setDrawerOpen(false)
+          await loadMaps()
+        },
+      })
+      return
+    }
+    const doomed = new Set([nodeId])
+    let grew = true
+    while (grew) {
+      grew = false
+      for (const item of activeMap.nodes) {
+        if (!doomed.has(item.id) && item.parentId && doomed.has(item.parentId)) { doomed.add(item.id); grew = true }
+      }
+    }
+    const descendants = doomed.size - 1
+    Modal.confirm({
+      title: `删除「${node.title}」？`,
+      content: descendants > 0
+        ? `它的 ${descendants} 个子主题、以及这些节点上的章节正文与问答都会一并删除，且不可恢复。`
+        : '该节点的章节正文与问答记录会一并删除，且不可恢复。',
+      okText: '删除',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: async () => {
+        const result = await window.electronAPI.muse.learning.deleteNode({ mapId: activeMap.id, nodeId })
+        if (!result.success) {
+          messageApi.error(result.error || '删除失败')
+          return
+        }
+        setDrawerOpen(false)
+        setEditMode(false)
+        await loadMaps(activeMap.id, node.parentId || activeMap.currentNodeId)
+        messageApi.success('节点已删除')
+      },
+    })
   }
 
   const saveNode = async () => {
@@ -251,7 +384,7 @@ export default function LearningMapPage() {
       const result = await window.electronAPI.muse.learning.updateNode({ mapId: activeMap.id, nodeId: selectedNode.id, updates: values })
       if (!result.success) throw new Error(result.error || '保存失败')
       setEditMode(false)
-      await loadMaps(activeMap.id, selectedNode.id)
+      await refresh(activeMap.id, selectedNode.id)
       messageApi.success('节点已保存')
     } catch (cause) {
       messageApi.error(cause instanceof Error ? cause.message : '保存失败')
@@ -260,15 +393,39 @@ export default function LearningMapPage() {
     }
   }
 
-  const markCurrent = async () => {
-    if (!activeMap || !selectedNode) return
-    const result = await window.electronAPI.muse.learning.setCurrent({ mapId: activeMap.id, nodeId: selectedNode.id })
+  const markCurrent = async (nodeId?: string) => {
+    if (!activeMap) return
+    const targetId = nodeId || selectedNode?.id
+    if (!targetId) return
+    const result = await window.electronAPI.muse.learning.setCurrent({ mapId: activeMap.id, nodeId: targetId })
     if (!result.success) {
       messageApi.error(result.error || '定位失败')
       return
     }
-    await loadMaps(activeMap.id, selectedNode.id)
+    await loadMaps(activeMap.id, selectedNodeId)
     messageApi.success('已设为当前位置')
+  }
+
+  const setStatusFromBoard = async (nodeId: string, status: LearningStatus) => {
+    if (!activeMap) return
+    const result = await window.electronAPI.muse.learning.updateNode({ mapId: activeMap.id, nodeId, updates: { status } })
+    if (!result.success) {
+      messageApi.error(result.error || '更新失败')
+      return
+    }
+    await refresh(activeMap.id, selectedNodeId)
+    messageApi.success(`已标记为「${statusMeta(status).label}」`)
+  }
+
+  const togglePrefetch = async (enabled: boolean) => {
+    setPrefetchEnabled(enabled)
+    const result = await window.electronAPI.muse.learning.setSettings({ prefetchEnabled: enabled })
+    if (!result.success) {
+      setPrefetchEnabled(!enabled)
+      messageApi.error(result.error || '设置失败')
+      return
+    }
+    messageApi.success(enabled ? '已开启后台预制' : '已关闭后台预制')
   }
 
   const continueInChat = () => {
@@ -282,24 +439,68 @@ export default function LearningMapPage() {
       anchor.nextStep ? `计划继续：${anchor.nextStep}` : `请围绕「${anchor.title}」继续教学，并通过追问检查我的理解。`,
     ].filter(Boolean).join('\n')
     sessionStorage.setItem('muse_initial_key', prompt)
+    // 这个入口的语义是「开始继续学」，不该让用户再手动按一次发送
+    sessionStorage.setItem('muse_initial_autosend', '1')
     navigate('/chat')
   }
 
-  const verifiedCount = activeMap?.nodes.filter(node => node.status === 'verified').length || 0
-  const understoodCount = activeMap?.nodes.filter(node => node.status === 'understood' || node.status === 'verified').length || 0
+  const mapMenuItems = [
+    { key: 'rename', label: '编辑图谱信息', icon: <EditOutlined /> },
+    { key: 'delete', label: '删除图谱', icon: <DeleteOutlined />, danger: true },
+  ]
+
+  const nodeMenuItems = (node: LearningNodeMeta) => [
+    { key: 'add', label: '添加子主题', icon: <PlusOutlined /> },
+    { key: 'current', label: '设为当前位置', icon: <AimOutlined />, disabled: node.id === activeMap?.currentNodeId },
+    { key: 'delete', label: '删除节点', icon: <DeleteOutlined />, danger: true, disabled: !node.parentId },
+  ]
+
+  const runNodeMenu = (node: LearningNodeMeta, key: string) => {
+    if (key === 'add') { setSelectedNodeId(node.id); setAddOpen(true) }
+    if (key === 'current') markCurrent(node.id)
+    if (key === 'delete') deleteNode(node.id)
+  }
+
+  const drawerNode = detailNode
+  const verifiedCount = counts.verified
+  const understoodOnly = counts.understood
+  const hasEvidence = Boolean(drawerNode?.evidence && drawerNode.evidence.trim())
 
   return (
     <PageShell
       title="学习图谱"
       description="保持知识主干、当前位置和掌握证据清晰可见"
-      count={activeMap ? `${understoodCount}/${activeMap.nodes.length} 个节点已理解` : undefined}
+      count={activeMap ? `${understoodOnly} 个已理解 · ${verifiedCount} 个已验证 / 共 ${activeMap.nodes.length} 个节点` : undefined}
       actions={(
-        <div className="flex items-center gap-2">
-          {prefetch && (prefetch.active || prefetch.queueLeft > 0) && (
-            <span className="flex items-center gap-1 rounded-full border border-border-subtle/60 px-2 py-0.5 text-[10px] text-text-muted" title="后台正在逐章预制书页内容，打开节点即可读">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="flex items-center gap-1.5 text-[10px] text-text-muted" title="空闲时逐章预制书页内容，打开节点即可读">
+            <Switch size="small" checked={prefetchEnabled} onChange={togglePrefetch} />
+            后台预制
+          </span>
+          {prefetch && prefetchEnabled && (prefetch.active || prefetch.queueLeft > 0 || prefetch.stalled > 0) && (
+            <span className="flex items-center gap-1 rounded-full border border-border-subtle/60 px-2 py-0.5 text-[10px] text-text-muted">
               <SyncOutlined spin={prefetch.active} className="text-sky-500" />
               {prefetch.active ? `正在预制「${prefetch.current?.title || ''}」` : '后台预制中'} · 剩 {prefetch.queueLeft} 章
+              {prefetch.stalled > 0 && ` · ${prefetch.stalled} 章暂缓`}
             </span>
+          )}
+          {activeMap && (
+            <Dropdown
+              menu={{
+                items: mapMenuItems,
+                onClick: ({ key }) => {
+                  if (!activeMap) return
+                  if (key === 'rename') {
+                    renameForm.setFieldsValue({ title: activeMap.title, description: activeMap.description || '' })
+                    setRenameTarget(activeMap)
+                  }
+                  if (key === 'delete') deleteMap(activeMap)
+                },
+              }}
+              trigger={['click']}
+            >
+              <Button size="small" icon={<MoreOutlined />} />
+            </Dropdown>
           )}
           {maps.length > 0 && (
             <Select
@@ -310,6 +511,7 @@ export default function LearningMapPage() {
               onChange={value => {
                 const map = maps.find(item => item.id === value)
                 setActiveMapId(value)
+                setEditMode(false)
                 setSelectedNodeId(map?.currentNodeId || map?.nodes[0]?.id || '')
               }}
             />
@@ -317,7 +519,7 @@ export default function LearningMapPage() {
           <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>新建图谱</Button>
         </div>
       )}
-      contentClassName="overflow-hidden p-0"
+      contentClassName="overflow-y-auto p-0 xl:overflow-hidden"
     >
       {messageHolder}
       {loading ? (
@@ -334,13 +536,15 @@ export default function LearningMapPage() {
           </Empty>
         </div>
       ) : (
-        <div className="grid h-full min-h-0 grid-cols-[260px_minmax(360px,1fr)_300px]">
+        <div className="flex h-full min-h-0 flex-col xl:grid xl:grid-cols-[260px_minmax(360px,1fr)_300px]">
           {/* 知识树 */}
-          <aside className="min-h-0 overflow-y-auto border-r border-border-subtle/60 px-3 py-4 scroll-container">
+          <aside className="max-h-56 min-h-0 shrink-0 overflow-y-auto border-b border-border-subtle/60 px-3 py-4 scroll-container xl:max-h-none xl:border-b-0 xl:border-r">
             <div className="mb-3 flex items-center justify-between px-1">
-              <div>
-                <div className="text-xs font-semibold text-text-primary">{activeMap.title}</div>
-                <div className="mt-0.5 text-[10px] text-text-faint">{activeMap.nodes.length} 个知识节点 · 已验证 {verifiedCount}</div>
+              <div className="min-w-0">
+                <div className="truncate text-xs font-semibold text-text-primary" title={activeMap.title}>{activeMap.title}</div>
+                <div className="mt-0.5 text-[10px] text-text-faint">
+                  {activeMap.nodes.length} 个知识节点 · 已理解 {understoodOnly} · 已验证 {verifiedCount}
+                </div>
               </div>
               <Button
                 type="text"
@@ -365,12 +569,29 @@ export default function LearningMapPage() {
               onSelect={(keys) => keys[0] && openNode(String(keys[0]))}
               titleRender={data => {
                 const item = data as unknown as TreeNodeData
-                const meta = statusMeta[item.node.status]
+                const meta = statusMeta(item.node.status)
                 return (
-                  <span className="flex min-w-0 items-center gap-2 text-xs">
+                  <span className="group flex min-w-0 items-center gap-2 text-xs">
                     <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: meta.color }} />
                     <span className="min-w-0 flex-1 truncate" title={item.title}>{item.title}</span>
-                    {item.node.id === activeMap.currentNodeId && <AimOutlined className="shrink-0 text-sky-500" />}
+                    {item.node.id === activeMap.currentNodeId && (
+                      <AimOutlined className="shrink-0" style={{ color: CURRENT_MARKER_COLOR }} />
+                    )}
+                    <Dropdown
+                      menu={{
+                        items: nodeMenuItems(item.node),
+                        onClick: ({ key, domEvent }) => { domEvent.stopPropagation(); runNodeMenu(item.node, key) },
+                      }}
+                      trigger={['click']}
+                    >
+                      <span
+                        className="shrink-0 rounded px-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+                        onClick={event => event.stopPropagation()}
+                        title="更多操作"
+                      >
+                        <MoreOutlined className="text-[11px] text-text-faint" />
+                      </span>
+                    </Dropdown>
                   </span>
                 )
               }}
@@ -378,8 +599,8 @@ export default function LearningMapPage() {
           </aside>
 
           {/* 思维导图 / 进度看板 */}
-          <main className="flex min-h-0 flex-col">
-            <div className="flex items-center justify-between border-b border-border-subtle/50 px-5 py-2.5">
+          <main className="flex min-h-[380px] min-w-0 flex-1 flex-col xl:min-h-0">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-subtle/50 px-5 py-2.5">
               <Segmented
                 size="small"
                 value={viewMode}
@@ -389,14 +610,23 @@ export default function LearningMapPage() {
                   { value: 'board', label: <span className="flex items-center gap-1"><AppstoreOutlined />进度看板</span> },
                 ]}
               />
+              {activeMap.nodes.length === 1 && (
+                <span className="text-[10px] text-text-faint">
+                  只有一个根节点：右键它、或用左侧 + 添加子主题，也可以在节点里用「下钻子主题」让 AI 展开
+                </span>
+              )}
             </div>
             {viewMode === 'mindmap' ? (
               <div className="min-h-0 flex-1">
                 <LearningMindMap
                   nodes={activeMap.nodes}
+                  mapTitle={activeMap.title}
                   currentNodeId={activeMap.currentNodeId}
                   selectedNodeId={selectedNode?.id}
                   onNodeClick={openNode}
+                  onAddChild={nodeId => { setSelectedNodeId(nodeId); setAddOpen(true) }}
+                  onSetCurrent={nodeId => markCurrent(nodeId)}
+                  onDeleteNode={deleteNode}
                 />
               </div>
             ) : (
@@ -405,13 +635,14 @@ export default function LearningMapPage() {
                   nodes={activeMap.nodes}
                   currentNodeId={activeMap.currentNodeId}
                   onNodeClick={openNode}
+                  onStatusChange={setStatusFromBoard}
                 />
               </div>
             )}
           </main>
 
           {/* 学习罗盘 */}
-          <aside className="min-h-0 overflow-y-auto border-l border-border-subtle/60 px-4 py-6 scroll-container">
+          <aside className="min-h-0 shrink-0 overflow-y-auto border-t border-border-subtle/60 px-4 py-6 scroll-container xl:border-t-0 xl:border-l">
             <div className="flex items-center gap-2 text-xs font-semibold text-text-primary"><CompassOutlined className="text-amber-500" />学习罗盘</div>
             <div className="mt-5 text-[10px] font-semibold text-text-faint">当前位置</div>
             <div className="mt-3">
@@ -444,8 +675,13 @@ export default function LearningMapPage() {
             <div className="mt-5 border-t border-border-subtle/50 pt-4">
               <div className="text-[10px] font-semibold text-text-faint">状态含义</div>
               <div className="mt-2 flex flex-wrap gap-1.5">
-                {Object.entries(statusMeta).map(([key, meta]) => <Tag key={key} color={meta.tag}>{meta.label}</Tag>)}
+                {LEARNING_STATUS_ORDER.map(status => (
+                  <Tag key={status} color={LEARNING_STATUS_META[status].tag}>{LEARNING_STATUS_META[status].label}</Tag>
+                ))}
               </div>
+              <p className="mt-2 text-[10px] leading-4 text-text-faint">
+                手动标记与章节验收都会写入状态；标为「已验证」时请在节点里留下掌握证据。
+              </p>
             </div>
           </aside>
         </div>
@@ -453,23 +689,26 @@ export default function LearningMapPage() {
 
       {/* 节点详情抽屉：阅读模式主打「看书学」，编辑模式维护内容 */}
       <Drawer
-        title={selectedNode ? selectedNode.title : '节点详情'}
+        title={drawerNode ? drawerNode.title : (selectedNode ? selectedNode.title : '节点详情')}
         width={560}
         open={drawerOpen}
         onClose={() => { setDrawerOpen(false); setEditMode(false) }}
-        footer={editMode ? (
+        footer={detailLoading || !drawerNode ? null : editMode ? (
           <div className="flex justify-end gap-2">
             <Button onClick={() => setEditMode(false)}>取消</Button>
             <Button type="primary" loading={saving} icon={<SaveOutlined />} onClick={saveNode}>保存节点</Button>
           </div>
         ) : (
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button danger type="text" icon={<DeleteOutlined />} disabled={!drawerNode.parentId} onClick={() => deleteNode(drawerNode.id)}>删除</Button>
             <Button icon={<EditOutlined />} onClick={() => setEditMode(true)}>编辑</Button>
             <Button type="primary" icon={<MessageOutlined />} onClick={continueInChat}>围绕此节点继续对话</Button>
           </div>
         )}
       >
-        {selectedNode && (editMode ? (
+        {detailLoading || !drawerNode ? (
+          <div className="flex h-40 items-center justify-center"><Spin /></div>
+        ) : editMode ? (
           <>
             <Steps
               size="small"
@@ -482,7 +721,7 @@ export default function LearningMapPage() {
                 <Input placeholder="节点名称" />
               </Form.Item>
               <Form.Item name="status" label="学习状态">
-                <Select options={Object.entries(statusMeta).map(([value, meta]) => ({ value, label: meta.label }))} />
+                <Select options={LEARNING_STATUS_ORDER.map(value => ({ value, label: LEARNING_STATUS_META[value].label }))} />
               </Form.Item>
               <Form.Item name="summary" label="我学到了什么" extra="用自己的话留下当前理解，不复制 AI 原文。">
                 <Input.TextArea rows={5} placeholder="例如：volatile 保证可见性和有序性，但不保证复合操作的原子性。" />
@@ -498,52 +737,68 @@ export default function LearningMapPage() {
         ) : (
           <>
             <div className="flex flex-wrap items-center gap-1.5">
-              <Tag color={statusMeta[selectedNode.status].tag}>{statusMeta[selectedNode.status].label}</Tag>
-              {selectedNode.id === activeMap?.currentNodeId && <Tag icon={<AimOutlined />} color="blue">当前位置</Tag>}
+              <Tag color={statusMeta(drawerNode.status).tag}>{statusMeta(drawerNode.status).label}</Tag>
+              {drawerNode.status === 'verified' && (
+                <Tag color={drawerNode.verifiedBy === 'quiz' ? 'green' : 'default'}>
+                  {verifiedSourceLabel(drawerNode.verifiedBy)}
+                </Tag>
+              )}
+              {drawerNode.id === activeMap?.currentNodeId && (
+                <Tag icon={<AimOutlined />} style={{ color: CURRENT_MARKER_COLOR, borderColor: CURRENT_MARKER_COLOR }}>
+                  当前位置
+                </Tag>
+              )}
               {activeMap?.builtIn && <Tag color="purple">内置知识</Tag>}
             </div>
             <div className="mt-2 text-[11px] text-text-faint">{selectedPath.map(node => node.title).join(' / ')}</div>
 
+            {/* 已验证但没留证据：自己标的「已验证」不该悄悄蒙混过关 */}
+            {drawerNode.status === 'verified' && !hasEvidence && (
+              <div className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-[11px] leading-5 text-text-muted">
+                这个节点标为「已验证」但还没有掌握证据。补一条独立复述、答题或实践结果，这个状态才站得住。
+              </div>
+            )}
+
             {/* 活的书：章节正文 + 圈选提问 + 下钻衍生 */}
             <div className="mt-4">
               <LearningBookReader
-                node={selectedNode as any}
+                node={drawerNode as any}
                 mapId={activeMap!.id}
                 mapTitle={activeMap!.title}
                 nodePath={selectedPath.map(item => item.title).join(' > ')}
                 prefetchCurrent={prefetch?.current || null}
                 nodeDirectory={nodeDirectory}
-                onChanged={() => loadMaps(activeMap!.id, selectedNode.id)}
+                onChanged={() => refresh(activeMap!.id, drawerNode.id)}
                 notify={(type, text) => messageApi[type](text)}
-                onNavigate={navigateToTitle}
+                onNavigate={navigateToGuide}
               />
             </div>
 
             <Card size="small" className="mt-3 bg-transparent" title={<span className="flex items-center gap-2 text-xs"><CheckCircleOutlined className="text-emerald-500" />掌握证据</span>}>
-              <p className="whitespace-pre-wrap text-xs leading-6 text-text-secondary">{selectedNode.evidence || '记录一次独立复述、答题、代码实践或纠错结果。'}</p>
+              <p className="whitespace-pre-wrap text-xs leading-6 text-text-secondary">{drawerNode.evidence || '记录一次独立复述、答题、代码实践或纠错结果。'}</p>
             </Card>
-            <Card size="small" className="mt-3 bg-transparent" title={<span className="flex items-center gap-2 text-xs"><CompassOutlined className="text-amber-500" />推荐资料与下一步</span>}>
-              <p className="whitespace-pre-wrap text-xs leading-6 text-text-secondary">{selectedNode.nextStep || '下一次回来时从哪里继续，或需要补哪一个前置知识。'}</p>
+            <Card size="small" className="mt-3 bg-transparent" title={<span className="flex items-center gap-2 text-xs"><CompassOutlined className="text-amber-500" />下一步</span>}>
+              <p className="whitespace-pre-wrap text-xs leading-6 text-text-secondary">{drawerNode.nextStep || '下一次回来时从哪里继续，或需要补哪一个前置知识。'}</p>
             </Card>
 
             <div className="mt-5 border-t border-border-subtle/50 pt-4">
               <div className="text-[10px] font-semibold text-text-faint">更新学习状态</div>
               <div className="mt-2 flex flex-wrap gap-1.5">
-                {Object.entries(statusMeta).map(([key, meta]) => (
+                {LEARNING_STATUS_ORDER.map(status => (
                   <Button
-                    key={key}
+                    key={status}
                     size="small"
-                    type={selectedNode.status === key ? 'primary' : 'default'}
-                    onClick={() => quickUpdateStatus(key as LearningStatus)}
-                  >{meta.label}</Button>
+                    type={drawerNode.status === status ? 'primary' : 'default'}
+                    onClick={() => quickUpdateStatus(status)}
+                  >{LEARNING_STATUS_META[status].label}</Button>
                 ))}
               </div>
             </div>
-            {activeMap && selectedNode.id !== activeMap.currentNodeId && (
-              <Button block className="mt-4" icon={<AimOutlined />} onClick={markCurrent}>设为当前位置</Button>
+            {activeMap && drawerNode.id !== activeMap.currentNodeId && (
+              <Button block className="mt-4" icon={<AimOutlined />} onClick={() => markCurrent(drawerNode.id)}>设为当前位置</Button>
             )}
           </>
-        ))}
+        )}
       </Drawer>
 
       {/* 新建图谱 */}
@@ -556,7 +811,26 @@ export default function LearningMapPage() {
         okText="创建图谱"
         okButtonProps={{ disabled: saving }}
       >
-        <Form form={createForm} layout="vertical" initialValues={{ title: 'Java', description: '体系化掌握 Java 核心知识与实践能力' }}>
+        <Form form={createForm} layout="vertical">
+          <Form.Item name="title" label="学习主题" rules={[{ required: true, message: '请输入学习主题' }]}>
+            <Input placeholder="例如：Java / React / 分布式系统" />
+          </Form.Item>
+          <Form.Item name="description" label="学习目标">
+            <Input.TextArea rows={3} placeholder="这个图谱最终要达到什么水平" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* 编辑图谱信息 */}
+      <Modal
+        title="编辑图谱信息"
+        open={Boolean(renameTarget)}
+        onCancel={() => setRenameTarget(null)}
+        onOk={renameMap}
+        confirmLoading={saving}
+        okText="保存"
+      >
+        <Form form={renameForm} layout="vertical">
           <Form.Item name="title" label="学习主题" rules={[{ required: true, message: '请输入学习主题' }]}>
             <Input placeholder="例如：Java / React / 分布式系统" />
           </Form.Item>

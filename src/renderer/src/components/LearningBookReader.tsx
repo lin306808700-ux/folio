@@ -8,6 +8,7 @@ import {
   LoadingOutlined, ReadOutlined, StopOutlined, ThunderboltOutlined,
 } from '@ant-design/icons'
 import MarkdownRenderer from './MarkdownRenderer'
+import type { LearningStatus } from './learningStatus'
 import type { LearningNode, LearningQA, LearningQuiz } from '../types/electron'
 
 interface LearningBookReaderProps {
@@ -21,15 +22,19 @@ interface LearningBookReaderProps {
   nodeDirectory: string
   onChanged: () => Promise<void>
   notify: (type: 'success' | 'error' | 'info', text: string) => void
-  // 跳转到引导推荐章节
-  onNavigate?: (nodeTitle: string) => void
+  // 跳转到引导推荐章节（优先用 nodeId 定位，标题会变、也可能重名）
+  onNavigate?: (guide: { nodeId?: string; nodeTitle: string }) => void
 }
 
 type RequestKind = 'content' | 'ask' | 'drill' | 'quiz' | 'grade'
 
+// 请求必须自带目标节点身份：落盘时一律用发起请求时的 mapId/nodeId，
+// 而不是「流结束时抽屉里正好打开的那个节点」
 interface ActiveRequest {
   id: string
   kind: RequestKind
+  mapId: string
+  nodeId: string
   question?: string
   selection?: string
 }
@@ -58,10 +63,12 @@ interface QuizSession {
   questions: QuizQuestion[]
   answers: string[]
   items?: { question: string; answer: string; pass: boolean; comment: string }[]
-  guidance?: { nodeTitle: string; reason: string }[]
+  guidance?: { nodeId?: string; nodeTitle: string; reason: string }[]
 }
 
 const makeRequestId = () => `lrn_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+
+const STATUS_RANK: Record<LearningStatus, number> = { unexplored: 0, learning: 1, understood: 2, verified: 3 }
 
 // 宽容解析 drill 返回的子知识点 JSON（容忍 ```json 围栏与多余文字）
 function parseDrillItems(raw: string): { title: string; summary: string }[] {
@@ -96,7 +103,7 @@ function parseQuizItems(raw: string): QuizQuestion[] {
 }
 
 // 宽容解析批改结果 JSON
-function parseGradeResult(raw: string): { results: { pass: boolean; comment: string }[]; guidance: { nodeTitle: string; reason: string }[] } | null {
+function parseGradeResult(raw: string): { results: { pass: boolean; comment: string }[]; guidance: { nodeId?: string; nodeTitle: string; reason: string }[] } | null {
   const match = raw.match(/\{[\s\S]*\}/)
   if (!match) return null
   try {
@@ -110,7 +117,11 @@ function parseGradeResult(raw: string): { results: { pass: boolean; comment: str
       guidance: (Array.isArray(parsed.guidance) ? parsed.guidance : [])
         .filter((g: { nodeTitle?: string }) => g && typeof g.nodeTitle === 'string' && g.nodeTitle.trim())
         .slice(0, 5)
-        .map((g: { nodeTitle: string; reason?: string }) => ({ nodeTitle: g.nodeTitle.trim().slice(0, 120), reason: String(g.reason || '').slice(0, 300) })),
+        .map((g: { nodeId?: string; nodeTitle: string; reason?: string }) => ({
+          nodeId: typeof g.nodeId === 'string' ? g.nodeId.trim().slice(0, 120) : '',
+          nodeTitle: g.nodeTitle.trim().slice(0, 120),
+          reason: String(g.reason || '').slice(0, 300),
+        })),
     }
   } catch {
     return null
@@ -130,14 +141,21 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
   const [qaDraft, setQaDraft] = useState<QaDraft | null>(null)
   const [toolbar, setToolbar] = useState<SelectionToolbar | null>(null)
   const [quiz, setQuizState] = useState<QuizSession | null>(null)
+  const rootRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)
   const qaPanelRef = useRef<HTMLDivElement | null>(null)
   const quizPanelRef = useRef<HTMLDivElement | null>(null)
   const reqRef = useRef<ActiveRequest | null>(null)
-  // 验收会话的最新镜像：onAiEnd 回调里读取，避免闭包过期
+  // 验收会话的最新镜像：onAiEnd 回调里读取，避免闭包过期。
+  // 必须同时支持直接赋值和函数式更新——原实现把更新函数原样存进了 ref，
+  // 导致作答后 quizRef.current 变成一个函数，「提交批改」会静默失效。
   const quizRef = useRef<QuizSession | null>(null)
-  const setQuiz = (next: QuizSession | null) => { quizRef.current = next; setQuizState(next) }
-  // 事件回调里读取最新上下文，避免闭包过期
+  const setQuiz = (next: QuizSession | null | ((prev: QuizSession | null) => QuizSession | null)) => {
+    const resolved = typeof next === 'function' ? next(quizRef.current) : next
+    quizRef.current = resolved
+    setQuizState(resolved)
+  }
+  // 事件回调里读取最新上下文（提示、刷新用；写入目标一律取自 reqRef）
   const ctxRef = useRef({ node, mapId, mapTitle, nodePath, onChanged, notify })
   ctxRef.current = { node, mapId, mapTitle, nodePath, onChanged, notify }
 
@@ -154,6 +172,7 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
       if (!req || data.requestId !== req.id) return
       reqRef.current = null
       const ctx = ctxRef.current
+      const api = window.electronAPI.muse.learning
 
       if (req.kind === 'content') {
         setGenerating(false)
@@ -164,8 +183,8 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
           return
         }
         if (data.content && data.content.trim()) {
-          const result = await window.electronAPI.muse.learning.updateNode({
-            mapId: ctx.mapId, nodeId: ctx.node.id, updates: { content: data.content },
+          const result = await api.updateNode({
+            mapId: req.mapId, nodeId: req.nodeId, updates: { content: data.content },
           })
           if (result.success) {
             setContentDraft(null)
@@ -184,14 +203,17 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
       if (req.kind === 'ask') {
         setQaDraft(prev => (prev ? { ...prev, streaming: false } : prev))
         if (data.success && data.content.trim()) {
-          const qa: LearningQA[] = [...(ctx.node.qa || []), {
+          // 以磁盘上的最新问答为基准合并，避免连续提问时后一次把前一次覆盖掉
+          const fresh = await api.getNode(req.mapId, req.nodeId)
+          const base: LearningQA[] = (fresh.success && fresh.data?.qa) || []
+          const qa: LearningQA[] = [...base, {
             question: req.question || '解释这段内容',
             selection: req.selection || '',
             answer: data.content,
             createdAt: new Date().toISOString(),
           }]
-          const result = await window.electronAPI.muse.learning.updateNode({
-            mapId: ctx.mapId, nodeId: ctx.node.id, updates: { qa },
+          const result = await api.updateNode({
+            mapId: req.mapId, nodeId: req.nodeId, updates: { qa },
           })
           if (result.success) {
             setQaDraft(null)
@@ -234,20 +256,32 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
           comment: graded.results[i]?.comment || '',
         }))
         const passCount = items.filter(item => item.pass).length
+        const allPassed = passCount === items.length
+        // 状态只升不降：已「已验证」的节点重做验收没全过，不该被打回「学习中」。
+        // 未全过时最多推进到「学习中」，已理解及以上的保持原状。
+        const fresh = await api.getNode(req.mapId, req.nodeId)
+        const currentStatus: LearningStatus = (fresh.success && fresh.data?.status) || 'learning'
+        const nextStatus: LearningStatus = allPassed
+          ? 'verified'
+          : (STATUS_RANK[currentStatus] > STATUS_RANK.learning ? currentStatus : 'learning')
         const record: LearningQuiz = { items, guidance: graded.guidance, createdAt: new Date().toISOString() }
-        const result = await window.electronAPI.muse.learning.updateNode({
-          mapId: ctx.mapId, nodeId: ctx.node.id,
+        const baseQuiz: LearningQuiz[] = (fresh.success && fresh.data?.quiz) || []
+        const result = await api.updateNode({
+          mapId: req.mapId, nodeId: req.nodeId,
           updates: {
-            quiz: [record, ...(ctx.node.quiz || [])],
-            status: passCount === items.length ? 'verified' : 'learning',
+            quiz: [record, ...baseQuiz],
+            status: nextStatus,
+            ...(nextStatus === 'verified' ? { verifiedBy: 'quiz' as const } : {}),
           },
         })
         if (result.success) {
           setQuiz({ ...session, phase: 'result', items, guidance: graded.guidance })
           await ctx.onChanged()
           ctx.notify(
-            passCount === items.length ? 'success' : 'info',
-            passCount === items.length ? '全部通过，本章已标记为已验收' : `通过 ${passCount}/${items.length}，建议按引导补读相关章节`,
+            allPassed ? 'success' : 'info',
+            allPassed
+              ? '全部通过，本章已标记为已验证'
+              : `通过 ${passCount}/${items.length}，学习状态保持不变，建议按引导补读相关章节`,
           )
         } else {
           ctx.notify('error', result.error || '批改结果保存失败')
@@ -256,7 +290,7 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
         return
       }
 
-      // drill：解析子知识点并批量挂到当前节点下
+      // drill：解析子知识点并挂到发起请求的那个节点下
       setDrilling(false)
       if (!data.success) {
         ctx.notify('error', data.error || '下钻失败')
@@ -269,8 +303,8 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
       }
       let created = 0
       for (const item of items) {
-        const result = await window.electronAPI.muse.learning.addNode({
-          mapId: ctx.mapId, parentId: ctx.node.id, title: item.title, summary: item.summary,
+        const result = await api.addNode({
+          mapId: req.mapId, parentId: req.nodeId, title: item.title, summary: item.summary,
         })
         if (result.success) created += 1
       }
@@ -280,27 +314,36 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
     return () => { offChunk(); offEnd() }
   }, [])
 
-  // 切换节点/卸载：中断进行中的生成，清理验收会话
+  // 切换节点：中断进行中的请求，并把局部状态彻底清干净。
+  // 只 abort 不清状态，会让新节点短暂显示上一章的流式正文；
+  // 万一 aiEnd 丢失还会永久卡在「撰写中」。
   useEffect(() => {
     return () => {
       const req = reqRef.current
       if (req) window.electronAPI.muse.learning.aiAbort(req.id)
+      reqRef.current = null
+      setContentDraft(null)
+      setGenerating(false)
+      setDrilling(false)
+      setQuizing(false)
+      setQaDraft(null)
+      setToolbar(null)
+      setQuiz(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [node.id])
-  useEffect(() => {
-    setQuiz(null)
   }, [node.id])
 
   const startRequest = async (kind: RequestKind, extra: { selection?: string; question?: string; content?: string; answers?: string; nodeDirectory?: string } = {}) => {
     const id = makeRequestId()
-    reqRef.current = { id, kind, ...extra }
+    const ctx = ctxRef.current
+    // 目标节点身份在发起请求时就固定下来，之后切节点也不会写错地方
+    reqRef.current = { id, kind, mapId: ctx.mapId, nodeId: ctx.node.id, ...extra }
     const result = await window.electronAPI.muse.learning.aiAsk({
       requestId: id,
       kind,
-      mapTitle,
-      nodePath,
-      nodeTitle: node.title,
+      mapTitle: ctx.mapTitle,
+      nodePath: ctx.nodePath,
+      nodeTitle: ctx.node.title,
       selection: extra.selection,
       question: extra.question,
       content: extra.content,
@@ -343,6 +386,8 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
     }
     doGenerate()
   }
+
+  const busy = generating || drilling || quizing || quiz?.phase === 'grading'
 
   const stopCurrent = () => {
     const req = reqRef.current
@@ -397,11 +442,14 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
     if (!ok) setQuiz({ ...session, phase: 'answering' })
   }
 
-  // 圈选后浮出「提问 / 下钻」工具条
+  // 圈选后浮出「提问 / 下钻」工具条。
+  // 坐标相对阅读器根节点计算（不再用 fixed）：抽屉存在 transform 祖先时
+  // fixed 会相对该祖先定位而错位，而且滚动时不跟随正文。
   const handleMouseUp = () => {
     setTimeout(() => {
+      const root = rootRef.current
       const selection = window.getSelection()
-      if (!selection || selection.isCollapsed || !contentRef.current) {
+      if (!selection || selection.isCollapsed || !contentRef.current || !root) {
         setToolbar(null)
         return
       }
@@ -411,14 +459,20 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
         return
       }
       const text = selection.toString().trim()
-      if (!text || text.length > 2000) {
+      if (!text) {
         setToolbar(null)
         return
       }
+      if (text.length > 2000) {
+        setToolbar(null)
+        notify('info', '圈选内容过长，请缩短范围后再提问')
+        return
+      }
       const rect = range.getBoundingClientRect()
+      const rootRect = root.getBoundingClientRect()
       setToolbar({
-        x: Math.max(8, rect.left + rect.width / 2 - 96),
-        y: Math.max(8, rect.top - 42),
+        x: Math.max(8, Math.min(rect.left - rootRect.left + rect.width / 2 - 96, rootRect.width - 208)),
+        y: Math.max(4, rect.top - rootRect.top - 42),
         text,
       })
     }, 0)
@@ -442,12 +496,12 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
   }
 
   const displayedContent = contentDraft !== null ? contentDraft : node.content || ''
-  const busy = generating || drilling
   const qaList = node.qa || []
   const backgroundWriting = !displayedContent && !generating && prefetchCurrent?.nodeId === node.id
+  const showToolbar = Boolean(toolbar && !busy && displayedContent)
 
   return (
-    <div onMouseUp={handleMouseUp}>
+    <div ref={rootRef} className="relative" onMouseUp={handleMouseUp}>
       {/* 工具行 */}
       <div className="flex flex-wrap items-center gap-2">
         {!displayedContent && !generating ? (
@@ -509,7 +563,7 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
         <Card
           size="small"
           className="mt-3 bg-transparent"
-          title={<span className="flex items-center gap-2 text-xs"><CheckCircleOutlined className="text-violet-500" />章节验收{quiz?.phase === 'result' ? ` · 通过 ${quiz.items!.filter(i => i.pass).length}/${quiz.items!.length}` : ''}</span>}
+          title={<span className="flex items-center gap-2 text-xs"><CheckCircleOutlined className="text-emerald-500" />章节验收{quiz?.phase === 'result' ? ` · 通过 ${quiz.items!.filter(i => i.pass).length}/${quiz.items!.length}` : ''}</span>}
           extra={quiz?.phase === 'answering' && <Button type="text" size="small" onClick={() => setQuiz(null)}>放弃</Button>}
         >
           {quizing && !quiz && (
@@ -541,7 +595,10 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
             </div>
           )}
           {quiz?.phase === 'grading' && (
-            <div className="py-3 text-center text-xs text-text-muted">考官正在逐题批改…</div>
+            <div className="flex items-center justify-center gap-2 py-3 text-xs text-text-muted">
+              <LoadingOutlined />考官正在逐题批改…
+              <Button size="small" danger icon={<StopOutlined />} onClick={stopCurrent}>停止</Button>
+            </div>
           )}
           {quiz?.phase === 'result' && quiz.items && (
             <>
@@ -565,8 +622,8 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
                     <button
                       key={index}
                       type="button"
-                      onClick={() => onNavigate?.(guide.nodeTitle)}
-                      className="mb-1.5 flex w-full items-center gap-2 rounded-md border border-border-subtle/60 bg-fill-secondary/40 px-2.5 py-1.5 text-left transition-colors last:mb-0 hover:border-violet-400/60"
+                      onClick={() => onNavigate?.(guide)}
+                      className="mb-1.5 flex w-full items-center gap-2 rounded-md border border-border-subtle/60 bg-fill-secondary/40 px-2.5 py-1.5 text-left transition-colors last:mb-0 hover:border-emerald-400/60"
                     >
                       <span className="flex-shrink-0 text-xs font-medium text-text-primary">{guide.nodeTitle}</span>
                       <span className="min-w-0 flex-1 truncate text-[10px] text-text-faint">{guide.reason}</span>
@@ -640,10 +697,10 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
         </Card>
       )}
 
-      {/* 圈选浮动工具条 */}
-      {toolbar && !busy && (
+      {/* 圈选浮动工具条：相对阅读器定位，随正文一起滚动 */}
+      {showToolbar && toolbar && (
         <div
-          className="fixed z-50 flex gap-1 rounded-lg border border-border-subtle bg-fill-primary p-1 shadow-lg"
+          className="absolute z-30 flex gap-1 rounded-lg border border-border-subtle bg-fill-primary p-1 shadow-lg"
           style={{ left: toolbar.x, top: toolbar.y }}
         >
           <Button

@@ -120,11 +120,39 @@ directory. Important owners:
 - Tasks: `src/main/muse/tasks.js` and `src/main/task-engine/state.js`
 - Goals: `src/main/muse/goals.js`
 - Learning maps: `src/main/muse/learning-maps.js`
+- Learning preferences (prefetch toggle): `src/main/muse/learning-settings.js`
 - Letters: `src/main/muse/mailbox.js`
 - Artifact index: `src/main/muse/artifact-store.js`
 
 Do not infer deletion semantics from UI wording. Verify whether an action should
 clear current state, archive data, or permanently delete persisted records.
+
+## Learning Maps
+
+The learning subsystem has its own data contract beyond the shared persistence
+rules above:
+
+- `list()` returns full maps including chapter bodies. Batch views (tree, mind
+  map, board, prefetch queue) use `listMeta()` instead and fetch one node's body
+  on demand with `getNode(mapId, nodeId)`.
+- `learning-maps.js` keeps a read cache keyed by file stamp; `list`/`get`/
+  `updateNode` are called on every interaction and must not re-parse the whole
+  file. Writes update the cache in place.
+- `deleteNode` removes the whole subtree and re-points `currentNodeId` to the
+  surviving parent. The only root node cannot be deleted on its own; use
+  `deleteMap` instead.
+- Chapter bodies, Q&A records, and quiz records are capped at the newest
+  entries. The store normalizes by `createdAt`, so callers may append or
+  prepend freely.
+- `status` is user-authoritative and may move in both directions. Automatic
+  transitions (quiz grading) only ever upgrade, and record their source in
+  `verifiedBy` (`manual` | `quiz`).
+- Guidance records from chapter quizzes carry both `nodeId` (authoritative) and
+  `nodeTitle` (display only). Resolve navigation by `nodeId` first; titles can be
+  renamed or duplicated.
+- Background chapter prefetch is a user-visible capability: it is gated by
+  `learning-settings.js`, per-node failures back off and are eventually skipped
+  rather than blocking the queue head.
 
 ## Known Technical Debt
 
