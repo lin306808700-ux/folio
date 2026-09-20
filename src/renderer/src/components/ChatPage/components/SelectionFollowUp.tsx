@@ -54,8 +54,10 @@ export function SelectionFollowUp({ containerRef, enabled, onFollowUp }: Selecti
     }
 
     const clearSelectionAction = (event: Event) => {
-      const target = event.target as HTMLElement | null
-      if (target?.closest('[data-selection-follow-up]')) return
+      // scroll / resize 的 event.target 是 document 或 window，没有 closest，
+      // 因此必须先确认是元素节点再调用。
+      const target = event.target
+      if (target instanceof Element && target.closest('[data-selection-follow-up]')) return
       setAction(null)
     }
 
