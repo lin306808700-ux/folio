@@ -4,8 +4,8 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Button, Card, Input, Modal, Tag } from 'antd'
 import {
-  CheckCircleOutlined, CloseCircleOutlined, CompassOutlined, ForkOutlined, HighlightOutlined,
-  LoadingOutlined, ReadOutlined, StopOutlined, ThunderboltOutlined,
+  CheckCircleOutlined, CloseCircleOutlined, CompassOutlined, ForkOutlined, GatewayOutlined,
+  HighlightOutlined, LoadingOutlined, PartitionOutlined, ReadOutlined, StopOutlined, ThunderboltOutlined,
 } from '@ant-design/icons'
 import MarkdownRenderer from './MarkdownRenderer'
 import type { LearningStatus } from './learningStatus'
@@ -20,13 +20,15 @@ interface LearningBookReaderProps {
   prefetchCurrent: { mapId: string; nodeId: string; title: string } | null
   // 全书目录（验收批改时供 AI 从中推荐阅读引导）
   nodeDirectory: string
+  // 已存在的同层知识点（横向平铺时去重用）
+  siblingTitles?: string
   onChanged: () => Promise<void>
   notify: (type: 'success' | 'error' | 'info', text: string) => void
   // 跳转到引导推荐章节（优先用 nodeId 定位，标题会变、也可能重名）
   onNavigate?: (guide: { nodeId?: string; nodeTitle: string }) => void
 }
 
-type RequestKind = 'content' | 'ask' | 'drill' | 'quiz' | 'grade'
+type RequestKind = 'content' | 'ask' | 'drill' | 'quiz' | 'grade' | 'spread' | 'portal'
 
 // 请求必须自带目标节点身份：落盘时一律用发起请求时的 mapId/nodeId，
 // 而不是「流结束时抽屉里正好打开的那个节点」
@@ -102,6 +104,46 @@ function parseQuizItems(raw: string): QuizQuestion[] {
   }
 }
 
+// 宽容解析横向平铺返回的同层知识点 JSON
+function parseSpreadItems(raw: string): { title: string; summary: string; reason: string }[] {
+  const match = raw.match(/\[[\s\S]*\]/)
+  if (!match) return []
+  try {
+    const parsed = JSON.parse(match[0])
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter(item => item && typeof item.title === 'string' && item.title.trim())
+      .slice(0, 5)
+      .map(item => ({
+        title: item.title.trim().slice(0, 120),
+        summary: String(item.summary || '').trim().slice(0, 500),
+        reason: String(item.reason || '').trim().slice(0, 300),
+      }))
+  } catch {
+    return []
+  }
+}
+
+// 宽容解析跨域门户 JSON。目标领域可能还没建图谱，所以只要求领域名非空。
+function parsePortalItems(raw: string): { domain: string; concept: string; bridge: string }[] {
+  const match = raw.match(/\[[\s\S]*\]/)
+  if (!match) return []
+  try {
+    const parsed = JSON.parse(match[0])
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter(item => item && typeof item.domain === 'string' && item.domain.trim())
+      .slice(0, 4)
+      .map(item => ({
+        domain: item.domain.trim().slice(0, 120),
+        concept: String(item.concept || '').trim().slice(0, 120),
+        bridge: String(item.bridge || '').trim().slice(0, 300),
+      }))
+  } catch {
+    return []
+  }
+}
+
 // 宽容解析批改结果 JSON
 function parseGradeResult(raw: string): { results: { pass: boolean; comment: string }[]; guidance: { nodeId?: string; nodeTitle: string; reason: string }[] } | null {
   const match = raw.match(/\{[\s\S]*\}/)
@@ -131,12 +173,14 @@ function parseGradeResult(raw: string): { results: { pass: boolean; comment: str
 /**
  * 学习图谱「活的书」阅读器：
  * - 章节正文（技术要点/讲解/代码实例）由 AI 按需撰写并持久化
- * - 圈选任意文字可提问或下钻衍生子知识点
+ * - 圈选任意文字沿四个正交方向展开：提问 / 下钻（纵深）/ 平铺（同层）/ 跨域（门户）
  */
-const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, mapTitle, nodePath, prefetchCurrent, nodeDirectory, onChanged, notify, onNavigate }) => {
+const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, mapTitle, nodePath, prefetchCurrent, nodeDirectory, siblingTitles, onChanged, notify, onNavigate }) => {
   const [contentDraft, setContentDraft] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
   const [drilling, setDrilling] = useState(false)
+  const [spreading, setSpreading] = useState(false)
+  const [portaling, setPortaling] = useState(false)
   const [quizing, setQuizing] = useState(false)
   const [qaDraft, setQaDraft] = useState<QaDraft | null>(null)
   const [toolbar, setToolbar] = useState<SelectionToolbar | null>(null)
@@ -290,27 +334,108 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
         return
       }
 
-      // drill：解析子知识点并挂到发起请求的那个节点下
-      setDrilling(false)
+      // drill：纵向。解析子知识点并挂到发起请求的那个节点下
+      if (req.kind === 'drill') {
+        setDrilling(false)
+        if (!data.success) {
+          ctx.notify('error', data.error || '下钻失败')
+          return
+        }
+        const items = parseDrillItems(data.content)
+        if (items.length === 0) {
+          ctx.notify('error', 'AI 未返回有效的子知识点')
+          return
+        }
+        let created = 0
+        for (const item of items) {
+          const result = await api.addNode({
+            mapId: req.mapId, parentId: req.nodeId, title: item.title, summary: item.summary,
+          })
+          if (result.success) created += 1
+        }
+        await ctx.onChanged()
+        ctx.notify('success', `已下钻添加 ${created} 个子知识点`)
+        return
+      }
+
+    // spread：横向平铺。新节点必须挂在当前节点的**父节点**下才是真正的同层；
+    // 挂到当前节点下会让树变成纵深链，横向语义就丢了。当前节点是根时降级为子节点。
+    if (req.kind === 'spread') {
+      setSpreading(false)
       if (!data.success) {
-        ctx.notify('error', data.error || '下钻失败')
+        ctx.notify('error', data.error || '平铺失败')
         return
       }
-      const items = parseDrillItems(data.content)
+      const items = parseSpreadItems(data.content)
       if (items.length === 0) {
-        ctx.notify('error', 'AI 未返回有效的子知识点')
+        ctx.notify('error', 'AI 未返回有效的同层知识点')
         return
       }
+      const source = await api.getNode(req.mapId, req.nodeId)
+      const sourceParentId = source.success && source.data ? source.data.parentId : null
+      const parentId = sourceParentId || req.nodeId
       let created = 0
       for (const item of items) {
         const result = await api.addNode({
-          mapId: req.mapId, parentId: req.nodeId, title: item.title, summary: item.summary,
+          mapId: req.mapId, parentId, title: item.title, summary: item.summary,
         })
-        if (result.success) created += 1
+        if (!result.success) continue
+        created += 1
+        // 同时记一条同类边：树表达「属于」，边表达「相关」，两者都要
+        if (result.data?.id) {
+          await api.addEdge({
+            mapId: req.mapId,
+            nodeId: req.nodeId,
+            edge: { type: 'peer', targetNodeId: result.data.id, targetTitle: item.title, note: item.reason },
+          })
+        }
       }
       await ctx.onChanged()
-      ctx.notify('success', `已下钻添加 ${created} 个子知识点`)
+      ctx.notify(
+        created > 0 ? 'success' : 'error',
+        created > 0
+          ? (sourceParentId ? `已平铺添加 ${created} 个同层知识点` : '当前是根节点，已改为添加子知识点')
+          : '同层知识点未能写入',
+      )
+      return
+    }
+
+    // portal：跨域门户。不新建图谱，只在当前节点上留一条边 ——
+    // 这样「领域的墙」可以被标注出来，而不污染当前图谱的树结构。
+    if (req.kind === 'portal') {
+      setPortaling(false)
+      if (!data.success) {
+        ctx.notify('error', data.error || '跨域分析失败')
+        return
+      }
+      const items = parsePortalItems(data.content)
+      if (items.length === 0) {
+        ctx.notify('error', 'AI 未返回有效的跨领域连接')
+        return
+      }
+      let linked = 0
+      for (const item of items) {
+        const result = await api.addEdge({
+          mapId: req.mapId,
+          nodeId: req.nodeId,
+          edge: {
+            type: 'portal',
+            targetTitle: item.domain,
+            note: [item.concept, item.bridge].filter(Boolean).join(' · '),
+          },
+        })
+        if (result.success) linked += 1
+      }
+      if (linked > 0) {
+        await ctx.onChanged()
+        ctx.notify('success', `已标记 ${linked} 个跨领域门户`)
+      } else {
+        ctx.notify('error', '门户未能写入')
+      }
+      return
+    }
     })
+
     return () => { offChunk(); offEnd() }
   }, [])
 
@@ -325,6 +450,8 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
       setContentDraft(null)
       setGenerating(false)
       setDrilling(false)
+      setSpreading(false)
+      setPortaling(false)
       setQuizing(false)
       setQaDraft(null)
       setToolbar(null)
@@ -333,7 +460,7 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [node.id])
 
-  const startRequest = async (kind: RequestKind, extra: { selection?: string; question?: string; content?: string; answers?: string; nodeDirectory?: string } = {}) => {
+  const startRequest = async (kind: RequestKind, extra: { selection?: string; question?: string; content?: string; answers?: string; nodeDirectory?: string; siblingTitles?: string } = {}) => {
     const id = makeRequestId()
     const ctx = ctxRef.current
     // 目标节点身份在发起请求时就固定下来，之后切节点也不会写错地方
@@ -349,6 +476,7 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
       content: extra.content,
       answers: extra.answers,
       nodeDirectory: extra.nodeDirectory,
+      siblingTitles: extra.siblingTitles,
     })
     if (!result.success) {
       reqRef.current = null
@@ -387,7 +515,7 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
     doGenerate()
   }
 
-  const busy = generating || drilling || quizing || quiz?.phase === 'grading'
+  const busy = generating || drilling || spreading || portaling || quizing || quiz?.phase === 'grading'
 
   const stopCurrent = () => {
     const req = reqRef.current
@@ -402,6 +530,10 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
       setQaDraft(prev => (prev ? { ...prev, streaming: false } : prev))
     } else if (req.kind === 'drill') {
       setDrilling(false)
+    } else if (req.kind === 'spread') {
+      setSpreading(false)
+    } else if (req.kind === 'portal') {
+      setPortaling(false)
     } else if (req.kind === 'quiz') {
       setQuizing(false)
     } else if (req.kind === 'grade') {
@@ -417,6 +549,27 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
     setDrilling(true)
     const ok = await startRequest('drill', selection ? { selection } : {})
     if (!ok) setDrilling(false)
+  }
+
+  // 横向平铺：看看同一层还有哪些同类。与下钻对称，是「生态感」的来源。
+  const startSpread = async (selection?: string) => {
+    window.getSelection()?.removeAllRanges()
+    setToolbar(null)
+    setSpreading(true)
+    const ok = await startRequest('spread', {
+      ...(selection ? { selection } : {}),
+      ...(siblingTitles ? { siblingTitles } : {}),
+    })
+    if (!ok) setSpreading(false)
+  }
+
+  // 跨域门户：这个知识点通向哪些别的领域
+  const startPortal = async (selection?: string) => {
+    window.getSelection()?.removeAllRanges()
+    setToolbar(null)
+    setPortaling(true)
+    const ok = await startRequest('portal', selection ? { selection } : {})
+    if (!ok) setPortaling(false)
   }
 
   // 章节验收：读完本章后出 3 道题检验是否真正理解
@@ -470,8 +623,9 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
       }
       const rect = range.getBoundingClientRect()
       const rootRect = root.getBoundingClientRect()
+      // 四个动作的工具栏约 340px 宽，居中于选区并夹在阅读器内
       setToolbar({
-        x: Math.max(8, Math.min(rect.left - rootRect.left + rect.width / 2 - 96, rootRect.width - 208)),
+        x: Math.max(8, Math.min(rect.left - rootRect.left + rect.width / 2 - 170, rootRect.width - 340)),
         y: Math.max(4, rect.top - rootRect.top - 42),
         text,
       })
@@ -516,6 +670,12 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
         <Button size="small" icon={<ForkOutlined />} loading={drilling} disabled={busy} onClick={() => startDrill()}>
           下钻子主题
         </Button>
+        <Button size="small" icon={<PartitionOutlined />} loading={spreading} disabled={busy} onClick={() => startSpread()}>
+          平铺同类
+        </Button>
+        <Button size="small" icon={<GatewayOutlined />} loading={portaling} disabled={busy} onClick={() => startPortal()}>
+          跨域门户
+        </Button>
         {displayedContent && (
           <Button size="small" icon={<CheckCircleOutlined />} loading={quizing} disabled={busy || quiz !== null} onClick={startQuiz}>
             验收本章
@@ -523,7 +683,7 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
         )}
         {busy && <Button size="small" danger icon={<StopOutlined />} onClick={stopCurrent}>停止</Button>}
         <span className="ml-auto flex items-center gap-1 text-[10px] text-text-faint">
-          <HighlightOutlined />圈选任意文字即可提问或下钻
+          <HighlightOutlined />圈选任意文字即可提问、下钻、平铺或跨域
         </span>
       </div>
 
@@ -697,7 +857,7 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
         </Card>
       )}
 
-      {/* 圈选浮动工具条：相对阅读器定位，随正文一起滚动 */}
+      {/* 圈选浮动工具条：四个正交的展开方向，相对阅读器定位，随正文一起滚动 */}
       {showToolbar && toolbar && (
         <div
           className="absolute z-30 flex gap-1 rounded-lg border border-border-subtle bg-fill-primary p-1 shadow-lg"
@@ -716,6 +876,18 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
             onMouseDown={event => event.preventDefault()}
             onClick={() => startDrill(toolbar.text)}
           >下钻</Button>
+          <Button
+            size="small"
+            icon={<PartitionOutlined />}
+            onMouseDown={event => event.preventDefault()}
+            onClick={() => startSpread(toolbar.text)}
+          >平铺</Button>
+          <Button
+            size="small"
+            icon={<GatewayOutlined />}
+            onMouseDown={event => event.preventDefault()}
+            onClick={() => startPortal(toolbar.text)}
+          >跨域</Button>
         </div>
       )}
 

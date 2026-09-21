@@ -41,9 +41,16 @@ function registerMuseHandlers(mainWindow) {
   ipcMain.handle('muse:learning:addNode', (_event, { mapId, ...payload }) => learningResponse(() => learningMaps.addNode(mapId, payload)))
   ipcMain.handle('muse:learning:deleteNode', (_event, { mapId, nodeId }) => learningResponse(() => learningMaps.deleteNode(mapId, nodeId)))
   ipcMain.handle('muse:learning:updateNode', (_event, { mapId, nodeId, updates }) => learningResponse(() => learningMaps.updateNode(mapId, nodeId, updates)))
+  // 批量插入：领域骨架一次几十个节点，逐个走 IPC 会把通道打爆
+  ipcMain.handle('muse:learning:addNodes', (_event, { mapId, items }) => learningResponse(() => learningMaps.addNodes(mapId, items)))
+  // 连接边：树边之外的第二种边（前置 / 同类 / 跨域门户）
+  ipcMain.handle('muse:learning:addEdge', (_event, { mapId, nodeId, edge }) => learningResponse(() => learningMaps.addEdge(mapId, nodeId, edge)))
+  ipcMain.handle('muse:learning:removeEdge', (_event, { mapId, nodeId, target }) => learningResponse(() => learningMaps.removeEdge(mapId, nodeId, target)))
+  ipcMain.handle('muse:learning:setCanon', (_event, { mapId, canon }) => learningResponse(() => learningMaps.setCanon(mapId, canon)))
   ipcMain.handle('muse:learning:setCurrent', (_event, { mapId, nodeId }) => learningResponse(() => learningMaps.setCurrent(mapId, nodeId)))
 
-  // ========== 学习图谱 AI 流式通道（活的书：写章节/圈选提问/下钻衍生） ==========
+  // ========== 学习图谱 AI 流式通道 ==========
+  // 活的书：写章节 / 圈选提问 / 下钻；三层模型：骨架铺开 / 横向平铺 / 跨域门户
   // 每个 requestId 一个 AbortController，支持中途停止
   const learningAiRequests = new Map()
   const { buildLearningPrompt } = require('../muse/learning-prompts')

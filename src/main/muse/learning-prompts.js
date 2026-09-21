@@ -3,11 +3,72 @@
 
 'use strict'
 
-// 学习图谱「活的书」提示词：章节撰写 / 圈选提问 / 下钻衍生 / 验收出题 / 批改引导。
+// 学习图谱「活的书」提示词：章节撰写 / 圈选提问 / 下钻衍生 / 验收出题 / 批改引导，
+// 以及三层模型里的骨架铺开、横向平铺、跨域门户。
 // muse-handlers（交互式）与 learning-prefetch（后台预生成）共用，保证两条链路产出风格一致。
 
-function buildLearningPrompt({ kind, mapTitle, nodePath, nodeTitle, selection, question, content, answers, nodeDirectory }) {
+function buildLearningPrompt({
+  kind, mapTitle, nodePath, nodeTitle, selection, question, content, answers, nodeDirectory,
+  description, existingTitles, siblingTitles,
+}) {
   const context = `知识图谱：${mapTitle || ''}\n章节路径：${nodePath || nodeTitle}\n当前节点：${nodeTitle}`
+  // skeleton：给整个领域铺一份清单，作为「分母」。这是全局感的唯一来源，
+  // 因为个人探索永远长不出「你不知道自己不知道」的部分。
+  if (kind === 'skeleton') {
+    return [
+      '你正在为一位学习者铺出某个领域的知识骨架。骨架的唯一作用是给出「分母」：让他知道这个领域大致包含什么、自己走到哪了，而不是替他学习。',
+      '',
+      `领域：${mapTitle || ''}`,
+      description ? `学习目标：${description}` : '',
+      existingTitles ? `以下知识点已经存在，不要重复列出：\n${existingTitles}` : '',
+      '',
+      '要求：',
+      '1. 4-7 个一级分支，每个分支 3-6 个子知识点，总计 25-45 个知识点。',
+      '2. 一级分支是这个领域的几大板块，彼此边界清晰、不重叠；子知识点是具体可学的概念，不是「概述」「简介」这类套话。',
+      '3. 标题尽量短（12 字以内）；summary 说明这个知识点解决什么问题（40 字以内），不要复述标题。',
+      '4. 覆盖这个领域的完整主线，必须包含初学者不会主动想到、但确实重要的部分——这正是骨架存在的意义。',
+      existingTitles ? '5. 只输出尚不存在的分支与知识点，已经列出的不要重复。' : '',
+      '',
+      '只输出 JSON，不要任何其他文字或 markdown 围栏：',
+      '{"scaleEstimate":该领域大致有多少个值得独立学习的概念(整数),"branches":[{"title":"分支名","summary":"这一支讲什么","children":[{"title":"知识点","summary":"它解决什么问题"}]}]}',
+    ].filter(Boolean).join('\n')
+  }
+  // spread：横向平铺。读者想知道「同一层还有哪些同类」，而不是继续往下钻。
+  // 这是「生态感」的来源，与 drill（纵深）对称。
+  if (kind === 'spread') {
+    return [
+      '读者已经读懂了下面这个知识点，现在想知道「和它同一层还有哪些同类」。注意：不是继续往下钻，而是横向看看这个生态位里还站着谁。',
+      '',
+      context,
+      selection ? `圈选内容：\n${selection}` : '',
+      siblingTitles ? `已经存在的同层知识点（不要重复）：\n${siblingTitles}` : '',
+      '',
+      '要求：',
+      '1. 给出 3-5 个与当前知识点同层、平级的同类：可以是替代方案、平行体系、相邻生态位。',
+      '2. 每个都要说清它和当前知识点处在同一层级的理由，以及各自适合什么场景；不要给出当前知识点的子概念。',
+      '3. 标题短（12 字以内），summary 50 字以内，reason 说清「为什么它算同级」。',
+      '',
+      '只输出 JSON 数组，不要任何其他文字或 markdown 围栏：',
+      '[{"title":"同类知识点短标题","summary":"它是什么、解决什么问题","reason":"为什么它和当前知识点同级"}]',
+    ].filter(Boolean).join('\n')
+  }
+  // portal：跨域门户。找出这个知识点和别的领域接壤的地方，标成「通往外面的门」。
+  if (kind === 'portal') {
+    return [
+      '读者想知道下面这个知识点「通向外面的门」：它和哪些别的领域接壤，那些领域里的哪个概念是它的邻居或支撑。',
+      '',
+      context,
+      selection ? `圈选内容：\n${selection}` : '',
+      '',
+      '要求：',
+      '1. 给出 2-4 个跨领域连接，领域名要是真实存在的学科或技术领域，不要生造。',
+      '2. concept 写清对方领域里具体是哪个概念（不是领域名本身）；bridge 说明两者在哪里握手、如何互相支撑。',
+      '3. 优先给出「学了它才能看懂当前知识点深层原理」的领域，而不是泛泛相关。',
+      '',
+      '只输出 JSON 数组，不要任何其他文字或 markdown 围栏：',
+      '[{"domain":"领域名","concept":"对方领域里的具体概念","bridge":"两者在哪里握手、如何互相支撑"}]',
+    ].filter(Boolean).join('\n')
+  }
   if (kind === 'content') {
     return [
       '你是一位资深服务端技术作者，正在为读者写一本可直接学习的技术书。请为下面的知识节点撰写一章内容。',

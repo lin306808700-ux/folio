@@ -251,8 +251,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       addNode: (payload) => ipcRenderer.invoke('muse:learning:addNode', payload),
       deleteNode: (payload) => ipcRenderer.invoke('muse:learning:deleteNode', payload),
       updateNode: (payload) => ipcRenderer.invoke('muse:learning:updateNode', payload),
+      addNodes: (payload) => ipcRenderer.invoke('muse:learning:addNodes', payload),
+      addEdge: (payload) => ipcRenderer.invoke('muse:learning:addEdge', payload),
+      removeEdge: (payload) => ipcRenderer.invoke('muse:learning:removeEdge', payload),
+      setCanon: (payload) => ipcRenderer.invoke('muse:learning:setCanon', payload),
       setCurrent: (payload) => ipcRenderer.invoke('muse:learning:setCurrent', payload),
-      // 活的书：AI 流式写章节/圈选提问/下钻衍生
+      // 活的书：AI 流式写章节/圈选提问/下钻；三层模型：骨架铺开/横向平铺/跨域门户
       aiAsk: (payload) => ipcRenderer.invoke('muse:learning:aiAsk', payload),
       aiAbort: (requestId) => ipcRenderer.invoke('muse:learning:aiAbort', { requestId }),
       onAiChunk: (callback) => {

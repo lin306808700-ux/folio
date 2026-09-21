@@ -130,7 +130,8 @@ clear current state, archive data, or permanently delete persisted records.
 ## Learning Maps
 
 The learning subsystem has its own data contract beyond the shared persistence
-rules above:
+rules above. The model itself is specified in
+[docs/learning-model.md](learning-model.md) — read that before changing it.
 
 - `list()` returns full maps including chapter bodies. Batch views (tree, mind
   map, board, prefetch queue) use `listMeta()` instead and fetch one node's body
@@ -138,21 +139,63 @@ rules above:
 - `learning-maps.js` keeps a read cache keyed by file stamp; `list`/`get`/
   `updateNode` are called on every interaction and must not re-parse the whole
   file. Writes update the cache in place.
-- `deleteNode` removes the whole subtree and re-points `currentNodeId` to the
-  surviving parent. The only root node cannot be deleted on its own; use
-  `deleteMap` instead.
+- `load()` normalizes legacy records in place (`origin: 'user'`, `edges: []`,
+  `lastReviewedAt: ''`, empty `canon`). There is no migration script and no
+  destructive rewrite; defaults persist on the next write.
+- Three structural layers, do not collapse them:
+  - **canon** — AI-generated domain skeleton. `node.origin === 'canon'` marks
+    skeleton nodes; `map.canon` records the generation. This is the denominator.
+  - **personal graph** — the tree, expressed by `parentId`.
+  - **edges** — the second kind of relation: `prereq` / `peer` / `portal`.
+    `parentId` only expresses “belongs to”; peer and cross-domain relations need
+    edges. `portal` edges deliberately do **not** create a new map — the target
+    domain may not exist yet, so only `targetTitle` is required.
+- `computeProgress(map)` is the single source for the two progress metrics
+  (coverage = entered / denominator; mastery = Σ weight × decay / denominator).
+  Renderer must consume it from `listMeta()` and never re-derive it.
+  `basedOn` degrades to `'graph'` for maps without skeleton nodes.
+- `masteryScore` is status weight × time decay (half-life 60 days, floored at
+  0.5); `stale` marks nodes that have decayed enough to warrant review. Decay
+  never mutates persisted `status`.
+- `deleteNode` removes the whole subtree, re-points `currentNodeId` to the
+  surviving parent, and prunes edges pointing at deleted nodes. The only root
+  node cannot be deleted on its own; use `deleteMap` instead.
 - Chapter bodies, Q&A records, and quiz records are capped at the newest
   entries. The store normalizes by `createdAt`, so callers may append or
   prepend freely.
 - `status` is user-authoritative and may move in both directions. Automatic
   transitions (quiz grading) only ever upgrade, and record their source in
-  `verifiedBy` (`manual` | `quiz`).
+  `verifiedBy` (`manual` | `quiz`). Status changes and quiz submissions also
+  reset `lastReviewedAt`.
 - Guidance records from chapter quizzes carry both `nodeId` (authoritative) and
   `nodeTitle` (display only). Resolve navigation by `nodeId` first; titles can be
   renamed or duplicated.
 - Background chapter prefetch is a user-visible capability: it is gated by
   `learning-settings.js`, per-node failures back off and are eventually skipped
   rather than blocking the queue head.
+- `addNodes` exists because skeleton generation inserts tens of nodes at once;
+  do not loop `addNode` over IPC for that. It skips items whose parent is
+  missing and throws when nothing valid remains.
+- Expansion actions are four orthogonal directions, not variations of one:
+  drill (children), spread (peers — insert under the **parent**, otherwise the
+  tree degenerates into a chain), portal (edges), and breadcrumb navigation.
+- `learning-seeds.js` is the only place built-in maps enter the store. It must
+  preserve the whole three-layer shape (`origin`, `edges`, `qa`, `quiz`,
+  `lastReviewedAt`, `canon`) — dropping a field silently degrades the seed back
+  into a plain tree, which is exactly the bug the model was built to fix.
+- Seed timestamps may be written as relative days (`createdDaysAgo`,
+  `reviewedDaysAgo`, `daysAgo`) and are materialized at load. A map that
+  demonstrates decay **must** be dated relative to today, or it rots on the
+  calendar. Nodes given no review time keep `lastReviewedAt: ''` — never invent
+  a decay start for them.
+- The published demo map (`builtin-learning-maps.demo.json`) is a deliberately
+  complete example of a map after months of use. Regenerate it with
+  `node scripts/generate-builtin-3month-demo.js`; sources live in
+  `scripts/builtin-agent-3month/`. The generator reuses chapter bodies from the
+  file it is about to overwrite, so re-running is stable.
+- Replacing a built-in map takes a new id plus an entry in
+  `DEPRECATED_BUILTIN_IDS`; the superseded map is removed on startup (built-in
+  ids only, user maps are never touched).
 
 ## Known Technical Debt
 

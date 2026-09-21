@@ -50,3 +50,40 @@ export function verifiedSourceLabel(verifiedBy?: string): string {
   if (verifiedBy === 'manual') return '手动标记'
   return '未记录依据'
 }
+
+// 掌握度色阶：色块代表熟悉度，而不是「有没有打开过」。
+// 分数来自主进程派生的 masteryScore（状态权重 × 记忆衰减），
+// 所以一个「已验证」但半年没碰的节点会明显变浅——这正是不衰减的色块会骗人的地方。
+export interface MasteryLevel {
+  // 分数下限（含）
+  min: number
+  label: string
+  color: string
+}
+
+export const MASTERY_LEVELS: MasteryLevel[] = [
+  { min: 0.8, label: '扎实', color: '#0f766e' },
+  { min: 0.55, label: '熟练', color: '#3f9c78' },
+  { min: 0.3, label: '生涩', color: '#7fb79a' },
+  { min: 0.01, label: '刚接触', color: '#bdd2c6' },
+  { min: 0, label: '未触碰', color: '#cbcfd4' },
+]
+
+export function masteryLevel(score?: number): MasteryLevel {
+  const value = Number.isFinite(score) ? Number(score) : 0
+  return MASTERY_LEVELS.find(level => value >= level.min) || MASTERY_LEVELS[MASTERY_LEVELS.length - 1]
+}
+
+export function masteryColor(score?: number): string {
+  return masteryLevel(score).color
+}
+
+export function masteryLabel(score?: number): string {
+  return masteryLevel(score).label
+}
+
+// 百分比展示：覆盖度与掌握度都是 0-1 的比例，统一取整
+export function formatPercent(value?: number): string {
+  if (!Number.isFinite(value)) return '—'
+  return `${Math.round(Number(value) * 100)}%`
+}

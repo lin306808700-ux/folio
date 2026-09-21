@@ -88,11 +88,15 @@ export interface ElectronAPI {
       create: (payload: { title: string; description?: string }) => Promise<{ success: boolean; data?: LearningMap; error?: string }>
       updateMap: (payload: { mapId: string; updates: { title?: string; description?: string } }) => Promise<{ success: boolean; data?: LearningMap; error?: string }>
       deleteMap: (mapId: string) => Promise<{ success: boolean; data?: { id: string; title: string; removedNodes: number }; error?: string }>
-      addNode: (payload: { mapId: string; parentId: string; title: string; summary?: string; status?: LearningNode['status'] }) => Promise<{ success: boolean; data?: LearningNode; error?: string }>
+      addNode: (payload: { mapId: string; parentId: string; title: string; summary?: string; status?: LearningNode['status']; origin?: LearningNodeOrigin }) => Promise<{ success: boolean; data?: LearningNode; error?: string }>
+      addNodes: (payload: { mapId: string; items: { parentId: string; title: string; summary?: string; status?: LearningNode['status']; origin?: LearningNodeOrigin }[] }) => Promise<{ success: boolean; data?: LearningNode[]; error?: string }>
       deleteNode: (payload: { mapId: string; nodeId: string }) => Promise<{ success: boolean; data?: { map: LearningMap; removed: string[] }; error?: string }>
-      updateNode: (payload: { mapId: string; nodeId: string; updates: Partial<Pick<LearningNode, 'title' | 'status' | 'verifiedBy' | 'summary' | 'evidence' | 'nextStep' | 'content' | 'qa' | 'quiz'>> }) => Promise<{ success: boolean; data?: LearningNode; error?: string }>
+      updateNode: (payload: { mapId: string; nodeId: string; updates: Partial<Pick<LearningNode, 'title' | 'status' | 'verifiedBy' | 'summary' | 'evidence' | 'nextStep' | 'content' | 'qa' | 'quiz' | 'origin' | 'edges'>> }) => Promise<{ success: boolean; data?: LearningNode; error?: string }>
+      addEdge: (payload: { mapId: string; nodeId: string; edge: LearningEdge }) => Promise<{ success: boolean; data?: LearningNode; error?: string }>
+      removeEdge: (payload: { mapId: string; nodeId: string; target: Partial<LearningEdge> }) => Promise<{ success: boolean; data?: LearningNode; error?: string }>
+      setCanon: (payload: { mapId: string; canon: { scaleEstimate?: number; source?: string } }) => Promise<{ success: boolean; data?: LearningCanon; error?: string }>
       setCurrent: (payload: { mapId: string; nodeId: string }) => Promise<{ success: boolean; data?: LearningMap; error?: string }>
-      aiAsk: (payload: { requestId: string; kind: 'content' | 'ask' | 'drill' | 'quiz' | 'grade'; mapTitle?: string; nodePath?: string; nodeTitle: string; selection?: string; question?: string; content?: string; answers?: string; nodeDirectory?: string }) => Promise<{ success: boolean; error?: string }>
+      aiAsk: (payload: { requestId: string; kind: 'content' | 'ask' | 'drill' | 'quiz' | 'grade' | 'skeleton' | 'spread' | 'portal'; mapTitle?: string; nodePath?: string; nodeTitle: string; selection?: string; question?: string; content?: string; answers?: string; nodeDirectory?: string; description?: string; existingTitles?: string; siblingTitles?: string }) => Promise<{ success: boolean; error?: string }>
       aiAbort: (requestId: string) => Promise<{ success: boolean }>
       onAiChunk: (callback: (data: { requestId: string; delta: string; content: string }) => void) => () => void
       onAiEnd: (callback: (data: { requestId: string; success: boolean; content: string; error?: string }) => void) => () => void
@@ -200,6 +204,44 @@ onMaxRetryReached: (callback: (data: { stepId: number; stepDescription: string; 
   }
 }
 
+// 节点来源：骨架由 AI 铺出（构成分母），其余是用户自己长出来的
+export type LearningNodeOrigin = 'canon' | 'user'
+
+// 树边之外的第二种边：parentId 只能表达「属于」，表达不了「相关」
+export type LearningEdgeType = 'prereq' | 'peer' | 'portal'
+
+export interface LearningEdge {
+  type: LearningEdgeType
+  // 同图谱内指向另一个节点
+  targetNodeId?: string
+  // 跨域门户指向另一张图谱；目标图谱可能还没建，此时只留领域名
+  targetMapId?: string
+  targetTitle?: string
+  note?: string
+}
+
+// 骨架生成记录：给这张图谱一个分母
+export interface LearningCanon {
+  generatedAt: string
+  // AI 估计这个领域大致有多少个值得独立学习的概念
+  scaleEstimate: number
+  source: string
+}
+
+// 派生的双指标进度。覆盖度回答「领域多大、我走到哪」；
+// 掌握度回答「我真的会了多少」；两者之差是看过但没吃透的量。
+export interface LearningProgress {
+  // canon：以骨架节点为分母；graph：没有骨架的旧图谱退化为已建节点数
+  basedOn: 'canon' | 'graph'
+  denominator: number
+  entered: number
+  byStatus: Record<LearningNode['status'], number>
+  coverage: number
+  mastery: number
+  gap: number
+  stale: number
+}
+
 export interface LearningNode {
   id: string
   parentId: string | null
@@ -207,6 +249,10 @@ export interface LearningNode {
   status: 'unexplored' | 'learning' | 'understood' | 'verified'
   // 「已验证」的来源：手动标记还是章节验收通过；离开已验证后清空
   verifiedBy?: '' | 'manual' | 'quiz'
+  origin?: LearningNodeOrigin
+  edges?: LearningEdge[]
+  // 最近一次状态变更或验收通过，用于记忆衰减
+  lastReviewedAt?: string
   summary: string
   evidence: string
   nextStep: string
@@ -226,6 +272,10 @@ export interface LearningNodeMeta {
   parentId: string | null
   title: string
   status: LearningNode['status']
+  origin?: LearningNodeOrigin
+  edges?: LearningEdge[]
+  // 状态权重 × 时间衰减后的有效分数，热力色块按它着色
+  masteryScore?: number
   summary: string
   nextStep: string
   hasContent: boolean
@@ -235,6 +285,8 @@ export interface LearningNodeMeta {
 
 export interface LearningMapMeta extends Omit<LearningMap, 'nodes'> {
   nodes: LearningNodeMeta[]
+  // 派生进度只在主进程算一份，渲染层不重复实现
+  progress: LearningProgress
 }
 
 export interface LearningQA {
@@ -272,6 +324,8 @@ export interface LearningMap {
   // 内置知识图谱（随应用注入，用户不可编辑来源）
   builtIn?: boolean
   currentNodeId: string
+  // 骨架生成记录；未生成时字段存在但为空
+  canon?: LearningCanon
   nodes: LearningNode[]
   createdAt: string
   updatedAt: string

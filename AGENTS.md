@@ -18,6 +18,12 @@ canonical project map and only inspect the modules relevant to the current task.
 - Streaming, stop generation, protocol parsing: `ChatPage/hooks/useStreamHandler.ts`
 - Sending, retries, session clearing: `ChatPage/hooks/useChatMessages.ts`
 - Restoring older bubbles: `ChatPage/hooks/useHistoryRecords.ts`
+- Learning model (skeleton, progress metrics, edges): `docs/learning-model.md`
+- Learning maps storage and derived progress: `src/main/muse/learning-maps.js`
+- Learning prompts (chapter, ask, drill, spread, portal, skeleton):
+  `src/main/muse/learning-prompts.js`
+- Learning UI (map, board, reader): `pages/LearningMapPage.tsx` plus
+  `components/LearningMindMap.tsx`, `LearningBoard.tsx`, `LearningBookReader.tsx`
 - Main-process AI streaming: `src/main/chat-handler.js`
 - Chat versus agent routing: `src/main/muse/router.js`
 - ReAct execution: `src/main/muse/react-engine.js`

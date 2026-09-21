@@ -5,7 +5,7 @@
   "main": "src/main/index.js",
   "scripts": {
     "test": "npm run test:core && npm run test:renderer",
-    "test:core": "node --test src/main/architecture-analyzer.test.js src/main/command-policy.test.js src/main/sandbox.test.js src/main/security-analyzer.test.js src/main/muse/learning-maps.test.js src/main/muse/react-engine.test.js src/main/task-engine/state.test.js src/main/task-engine/tools/command.test.js",
+    "test:core": "node --test src/main/architecture-analyzer.test.js src/main/command-policy.test.js src/main/sandbox.test.js src/main/security-analyzer.test.js src/main/muse/learning-maps.test.js src/main/muse/learning-seeds.test.js src/main/muse/react-engine.test.js src/main/task-engine/state.test.js src/main/task-engine/tools/command.test.js",
     "test:renderer": "npm --prefix src/renderer test",
     "check:syntax": "find src/main src/preload src/shared src/mcp-server scripts -name '*.js' -not -path '*/node_modules/*' -exec node --check {} +",
     "check": "npm run check:syntax && npm test && npm run build:renderer",

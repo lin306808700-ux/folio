@@ -8,18 +8,19 @@ import {
 } from 'antd'
 import {
   AimOutlined, AppstoreOutlined, CheckCircleOutlined, CompassOutlined, DeleteOutlined, EditOutlined,
-  MessageOutlined, MoreOutlined, PartitionOutlined, PlusOutlined, SaveOutlined, SyncOutlined,
+  GatewayOutlined, GlobalOutlined, MessageOutlined, MoreOutlined, PartitionOutlined, PlusOutlined,
+  SaveOutlined, SyncOutlined,
 } from '@ant-design/icons'
 import PageShell from '../components/PageShell'
 import LearningMindMap from '../components/LearningMindMap'
 import LearningBoard from '../components/LearningBoard'
 import LearningBookReader from '../components/LearningBookReader'
 import {
-  CURRENT_MARKER_COLOR, LEARNING_STATUS_META, LEARNING_STATUS_ORDER, countByStatus, statusMeta,
-  verifiedSourceLabel, type LearningStatus,
+  CURRENT_MARKER_COLOR, LEARNING_STATUS_META, LEARNING_STATUS_ORDER, countByStatus, formatPercent,
+  statusMeta, verifiedSourceLabel, type LearningStatus,
 } from '../components/learningStatus'
 import { isElectron } from '../utils/config'
-import type { LearningMapMeta, LearningNode, LearningNodeMeta } from '../types/electron'
+import type { LearningEdge, LearningMapMeta, LearningNode, LearningNodeMeta } from '../types/electron'
 
 interface DetailGuide { nodeId?: string; nodeTitle: string }
 
@@ -61,6 +62,43 @@ function buildTree(nodes: LearningNodeMeta[]): TreeNodeData[] {
   return toData(null)
 }
 
+interface SkeletonBranch {
+  title: string
+  summary: string
+  children: { title: string; summary: string }[]
+}
+
+// 宽容解析领域骨架 JSON（容忍 ```json 围栏与多余文字）
+function parseSkeleton(raw: string): { scaleEstimate: number; branches: SkeletonBranch[] } | null {
+  const match = raw.match(/\{[\s\S]*\}/)
+  if (!match) return null
+  try {
+    const parsed = JSON.parse(match[0])
+    const branches = (Array.isArray(parsed?.branches) ? parsed.branches : [])
+      .filter((branch: unknown): branch is Record<string, unknown> =>
+        Boolean(branch) && typeof (branch as Record<string, unknown>).title === 'string')
+      .slice(0, 10)
+      .map((branch: Record<string, unknown>) => ({
+        title: String(branch.title).trim().slice(0, 120),
+        summary: String(branch.summary || '').trim().slice(0, 500),
+        children: (Array.isArray(branch.children) ? branch.children : [])
+          .filter((child: unknown): child is Record<string, unknown> =>
+            Boolean(child) && typeof (child as Record<string, unknown>).title === 'string')
+          .slice(0, 8)
+          .map((child: Record<string, unknown>) => ({
+            title: String(child.title).trim().slice(0, 120),
+            summary: String(child.summary || '').trim().slice(0, 500),
+          })),
+      }))
+      .filter((branch: SkeletonBranch) => branch.title)
+    if (branches.length === 0) return null
+    const scaleEstimate = Number.isFinite(Number(parsed?.scaleEstimate)) ? Math.round(Number(parsed.scaleEstimate)) : 0
+    return { scaleEstimate, branches }
+  } catch {
+    return null
+  }
+}
+
 export default function LearningMapPage() {
   const navigate = useNavigate()
   const [messageApi, messageHolder] = message.useMessage()
@@ -78,6 +116,7 @@ export default function LearningMapPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [prefetchEnabled, setPrefetchEnabled] = useState(true)
+  const [skeletonRunning, setSkeletonRunning] = useState(false)
   const [prefetch, setPrefetch] = useState<{ active: boolean; current: { mapId: string; nodeId: string; title: string } | null; queueLeft: number; stalled: number; doneSession: number } | null>(null)
   const [createForm] = Form.useForm<{ title: string; description: string }>()
   const [addForm] = Form.useForm<{ title: string }>()
@@ -114,6 +153,12 @@ export default function LearningMapPage() {
     return lines.join('\n')
   }, [activeMap])
 
+  // 骨架节点数：分母。没有骨架的图谱（含内置演示图谱）退化为全部节点
+  const canonCount = useMemo(
+    () => (activeMap ? activeMap.nodes.filter(node => node.origin === 'canon').length : 0),
+    [activeMap],
+  )
+
   const loadMaps = useCallback(async (preferredMapId?: string, preferredNodeId?: string) => {
     if (!isElectron) {
       setLoading(false)
@@ -149,6 +194,90 @@ export default function LearningMapPage() {
     await loadMaps(targetMapId, targetNodeId)
     if (targetNodeId) await loadDetail(targetMapId, targetNodeId)
   }, [activeMapId, selectedNodeId, loadMaps, loadDetail])
+
+  // 领域骨架：全局感的唯一来源。个人探索永远长不出「不知道自己不知道」的部分，
+  // 所以分母必须由外部清单给出，否则覆盖度只是「已建节点」的自我循环。
+  const skeletonReqRef = useRef<{ requestId: string; mapId: string; rootId: string } | null>(null)
+
+  const generateSkeleton = async () => {
+    if (!activeMap || skeletonRunning) return
+    const root = activeMap.nodes.find(node => !node.parentId) || activeMap.nodes[0]
+    if (!root) return
+    const requestId = `lrn_skeleton_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+    skeletonReqRef.current = { requestId, mapId: activeMap.id, rootId: root.id }
+    setSkeletonRunning(true)
+    const result = await window.electronAPI.muse.learning.aiAsk({
+      requestId,
+      kind: 'skeleton',
+      mapTitle: activeMap.title,
+      nodeTitle: activeMap.title,
+      nodePath: activeMap.title,
+      description: activeMap.description || '',
+      // 已有节点全部带上做去重，避免补充骨架时把同一批概念再铺一遍
+      existingTitles: activeMap.nodes.length > 1
+        ? activeMap.nodes.map(node => `- ${node.title}`).join('\n')
+        : '',
+    })
+    if (!result.success) {
+      skeletonReqRef.current = null
+      setSkeletonRunning(false)
+      messageApi.error(result.error || 'AI 通道不可用')
+    }
+  }
+
+  useEffect(() => {
+    return window.electronAPI.muse.learning.onAiEnd(async data => {
+      const pending = skeletonReqRef.current
+      if (!pending || data.requestId !== pending.requestId) return
+      skeletonReqRef.current = null
+      setSkeletonRunning(false)
+      if (!data.success) {
+        messageApi.info(data.error || '骨架生成已停止')
+        return
+      }
+      const parsed = parseSkeleton(data.content)
+      if (!parsed) {
+        messageApi.error('AI 未返回有效的领域骨架')
+        return
+      }
+      const api = window.electronAPI.muse.learning
+      let created = 0
+      for (const branch of parsed.branches) {
+        const branchResult = await api.addNode({
+          mapId: pending.mapId, parentId: pending.rootId,
+          title: branch.title, summary: branch.summary, origin: 'canon',
+        })
+        if (!branchResult.success || !branchResult.data) continue
+        created += 1
+        if (branch.children.length === 0) continue
+        const childResult = await api.addNodes({
+          mapId: pending.mapId,
+          items: branch.children.map(child => ({
+            parentId: branchResult.data!.id,
+            title: child.title,
+            summary: child.summary,
+            origin: 'canon' as const,
+          })),
+        })
+        if (childResult.success) created += childResult.data?.length || 0
+      }
+      if (created === 0) {
+        messageApi.error('骨架未能写入')
+        return
+      }
+      await api.setCanon({
+        mapId: pending.mapId,
+        canon: { scaleEstimate: parsed.scaleEstimate, source: 'ai' },
+      })
+      await refresh(pending.mapId)
+      messageApi.success(
+        parsed.scaleEstimate > created
+          ? `已铺出 ${created} 个知识点，AI 估计本领域约有 ${parsed.scaleEstimate} 个概念可学`
+          : `已铺出 ${created} 个知识点`,
+      )
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refresh, messageApi])
 
   useEffect(() => {
     loadMaps().catch(cause => messageApi.error(cause instanceof Error ? cause.message : '加载失败')).finally(() => setLoading(false))
@@ -234,6 +363,27 @@ export default function LearningMapPage() {
       return
     }
     await openNode(target.id)
+  }
+
+  // 删掉一条 AI 标错的连接边（树结构不受影响）
+  const dropEdge = async (nodeId: string, edge: LearningEdge) => {
+    if (!activeMap) return
+    const result = await window.electronAPI.muse.learning.removeEdge({
+      mapId: activeMap.id,
+      nodeId,
+      target: {
+        type: edge.type,
+        targetNodeId: edge.targetNodeId,
+        targetMapId: edge.targetMapId,
+        targetTitle: edge.targetTitle,
+      },
+    })
+    if (!result.success) {
+      messageApi.error(result.error || '删除连接失败')
+      return
+    }
+    await refresh(activeMap.id, nodeId)
+    messageApi.success('已删除连接')
   }
 
   const quickUpdateStatus = async (status: LearningStatus) => {
@@ -470,7 +620,9 @@ export default function LearningMapPage() {
     <PageShell
       title="学习图谱"
       description="保持知识主干、当前位置和掌握证据清晰可见"
-      count={activeMap ? `${understoodOnly} 个已理解 · ${verifiedCount} 个已验证 / 共 ${activeMap.nodes.length} 个节点` : undefined}
+      count={activeMap
+        ? `覆盖 ${formatPercent(activeMap.progress.coverage)} · 掌握 ${formatPercent(activeMap.progress.mastery)} · 共 ${activeMap.progress.denominator} 个知识点`
+        : undefined}
       actions={(
         <div className="flex flex-wrap items-center gap-2">
           <span className="flex items-center gap-1.5 text-[10px] text-text-muted" title="空闲时逐章预制书页内容，打开节点即可读">
@@ -634,6 +786,7 @@ export default function LearningMapPage() {
                 <LearningBoard
                   nodes={activeMap.nodes}
                   currentNodeId={activeMap.currentNodeId}
+                  progress={activeMap.progress}
                   onNodeClick={openNode}
                   onStatusChange={setStatusFromBoard}
                 />
@@ -644,6 +797,50 @@ export default function LearningMapPage() {
           {/* 学习罗盘 */}
           <aside className="min-h-0 shrink-0 overflow-y-auto border-t border-border-subtle/60 px-4 py-6 scroll-container xl:border-t-0 xl:border-l">
             <div className="flex items-center gap-2 text-xs font-semibold text-text-primary"><CompassOutlined className="text-amber-500" />学习罗盘</div>
+
+            {/* 领域骨架：分母。没有它，覆盖度只是「已建节点」的自我循环 */}
+            <div className="mt-5 border-b border-border-subtle/50 pb-4">
+              <div className="text-[10px] font-semibold text-text-faint">领域骨架</div>
+              {activeMap.canon?.generatedAt ? (
+                <>
+                  <p className="mt-2 text-xs leading-5 text-text-secondary">
+                    已铺出 {canonCount} 个知识点。覆盖度 {formatPercent(activeMap.progress.coverage)}，
+                    掌握度 {formatPercent(activeMap.progress.mastery)}
+                    {activeMap.progress.gap > 0.01 && `，看过没吃透 ${formatPercent(activeMap.progress.gap)}`}。
+                  </p>
+                  <Button
+                    size="small"
+                    className="mt-2"
+                    icon={<GlobalOutlined />}
+                    loading={skeletonRunning}
+                    onClick={generateSkeleton}
+                  >
+                    补充骨架
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className="mt-2 text-xs leading-5 text-text-secondary">
+                    还没有骨架。个人探索永远长不出「不知道自己不知道」的部分 ——
+                    先铺一份领域清单，才知道这个领域有多大、自己走到哪了。
+                  </p>
+                  <Button
+                    size="small"
+                    type="primary"
+                    className="mt-2"
+                    icon={<GlobalOutlined />}
+                    loading={skeletonRunning}
+                    onClick={generateSkeleton}
+                  >
+                    生成本领域骨架
+                  </Button>
+                </>
+              )}
+              {skeletonRunning && (
+                <p className="mt-2 text-[10px] leading-4 text-text-faint">AI 正在梳理本领域的板块与知识点，完成后自动入图。</p>
+              )}
+            </div>
+
             <div className="mt-5 text-[10px] font-semibold text-text-faint">当前位置</div>
             <div className="mt-3">
               {currentPath.length > 0 ? (
@@ -752,6 +949,63 @@ export default function LearningMapPage() {
             </div>
             <div className="mt-2 text-[11px] text-text-faint">{selectedPath.map(node => node.title).join(' / ')}</div>
 
+            {/* 第 2 层：连接边。树只表达「属于」，横向的同类与通往别处的大门靠边来表达 */}
+            {(drawerNode.edges || []).length > 0 && (
+              <div className="mt-4 rounded-lg border border-border-subtle/60 px-3 py-2.5">
+                <div className="flex items-center gap-1.5 text-[10px] font-semibold text-text-faint">
+                  <GatewayOutlined />知识连接
+                </div>
+                <div className="mt-2 flex flex-col gap-2">
+                  {(drawerNode.edges || []).map((edge, index) => {
+                    const peer = edge.targetNodeId
+                      ? activeMap?.nodes.find(item => item.id === edge.targetNodeId) || null
+                      : null
+                    const peerMap = edge.targetMapId
+                      ? maps.find(item => item.id === edge.targetMapId) || null
+                      : null
+                    const typeLabel = edge.type === 'peer' ? '同类' : edge.type === 'prereq' ? '前置' : '跨域'
+                    const typeColor = edge.type === 'portal' ? 'purple' : edge.type === 'prereq' ? 'orange' : 'blue'
+                    return (
+                      <div key={`${edge.type}-${edge.targetNodeId || edge.targetMapId || edge.targetTitle}-${index}`} className="text-[11px] leading-5">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Tag color={typeColor} className="m-0">{typeLabel}</Tag>
+                          {peer ? (
+                            <button className="text-left text-text-muted hover:text-text-primary" onClick={() => openNode(peer.id)}>
+                              {peer.title}
+                            </button>
+                          ) : peerMap ? (
+                            <button
+                              className="text-left text-text-muted hover:text-text-primary"
+                              onClick={() => {
+                                setActiveMapId(peerMap.id)
+                                setSelectedNodeId(peerMap.currentNodeId || peerMap.nodes[0]?.id || '')
+                              }}
+                            >
+                              {peerMap.title} · 切换图谱
+                            </button>
+                          ) : (
+                            <span className="text-text-muted">
+                              {edge.targetTitle || '未命名目标'}
+                              {edge.type === 'portal' && <span className="text-text-faint"> · 尚未建图谱</span>}
+                            </span>
+                          )}
+                          <Button
+                            type="text"
+                            size="small"
+                            className="ml-auto"
+                            icon={<DeleteOutlined />}
+                            title="删除这条连接"
+                            onClick={() => dropEdge(drawerNode.id, edge)}
+                          />
+                        </div>
+                        {edge.note && <div className="mt-0.5 text-[10px] text-text-faint">{edge.note}</div>}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* 已验证但没留证据：自己标的「已验证」不该悄悄蒙混过关 */}
             {drawerNode.status === 'verified' && !hasEvidence && (
               <div className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-[11px] leading-5 text-text-muted">
@@ -759,7 +1013,7 @@ export default function LearningMapPage() {
               </div>
             )}
 
-            {/* 活的书：章节正文 + 圈选提问 + 下钻衍生 */}
+            {/* 活的书：章节正文 + 圈选提问 + 四个方向的展开 */}
             <div className="mt-4">
               <LearningBookReader
                 node={drawerNode as any}
@@ -768,6 +1022,10 @@ export default function LearningMapPage() {
                 nodePath={selectedPath.map(item => item.title).join(' > ')}
                 prefetchCurrent={prefetch?.current || null}
                 nodeDirectory={nodeDirectory}
+                siblingTitles={activeMap!.nodes
+                  .filter(item => item.parentId === drawerNode.parentId && item.id !== drawerNode.id)
+                  .map(item => `- ${item.title}`)
+                  .join('\n')}
                 onChanged={() => refresh(activeMap!.id, drawerNode.id)}
                 notify={(type, text) => messageApi[type](text)}
                 onNavigate={navigateToGuide}
