@@ -75,6 +75,10 @@ canonical project map and only inspect the modules relevant to the current task.
   splitting. Size warnings are known, not build failures.
 - Do not modify generated `src/renderer/dist/bundle.js` manually; it is updated by
   the renderer build.
+- UI changes that affect the learning map or the node-detail window invalidate the
+  README screenshots. Regenerate with `scripts/capture-screenshots.js` and follow the
+  framing convention in `docs/screenshots/README.md`; the knowledge map has 80+ nodes,
+  so its default "fit to canvas" framing (18%) is not usable for a README image.
 
 ## Editing Safety
 
