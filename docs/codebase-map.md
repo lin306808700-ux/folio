@@ -177,8 +177,33 @@ rules above. The model itself is specified in
 - `content` and `status` are independent facts: `content` means “this page is
   written”, `status` means “how far I have studied”. Prefetch writes bodies for
   `unexplored` nodes on purpose, so **never infer progress from body presence**.
-  The bundled demo bakes bodies for all 52 nodes (empty prefetch queue), which is
+  The bundled demo bakes bodies for all 81 nodes (empty prefetch queue), which is
   what keeps the sample complete in environments with no AI access.
+- `learning-prompts.js` is the single generation contract shared by the
+  interactive path (`muse-handlers.js`) and the background path
+  (`learning-prefetch.js`). Keep them fed with the same inputs or the two paths
+  will produce chapters that disagree about scope:
+  - `kind: 'content'` requires `outlineTitles` (title-only indented tree) and
+    `siblingTitles`. Without neighbourhood context every chapter re-explains the
+    background, so chapters overlap and the structure loosens. `outlineTitles`
+    is deliberately title-only — `nodeDirectory` carries internal ids for the
+    grading prompt and must not be reused here.
+  - `kind: 'skeleton'` may return **three** levels; `parseSkeletonNodes` walks
+    them recursively under a depth (3) and total-node (120) cap and writes real
+    parent ids. Branch nodes are written before their children, so insertion
+    order matters only for readability.
+  - The chapter skeleton is `### 技术要点 → ### 深入讲解 → ### 实例 →
+    ### 常见误区与考点` (h3, matching every chapter already in the repo).
+    Section 3 is `### 代码实例` for engineering topics and `### 实例与证据` for
+    non-engineering ones — the contract is topic-adaptive, not tech-only.
+- The bundled demo's chapter sources live in
+  `scripts/builtin-agent-3month/`: `outline.js` (tree, statuses, timeline,
+  edges), `dialogue.js` (Q&A + quizzes), and several `chapters*.md` files.
+  `generate-builtin-3month-demo.js` loads **every** `chapters.md` /
+  `chapters-*.md` in that directory and fails on a duplicate node id across
+  files — split files on purpose so a one-chapter diff stays small.
+  `scripts/verify-demo.js` prints an inspection report; run it after touching
+  the demo.
 - Provider failures can arrive as **plain stdout text**. `qodercli` writes quota
   and auth errors to stdout (`Qoder API error: FORBIDDEN - {…}`), which a naive
   stream reader cannot tell apart from model output. `src/shared/ai-error.js`

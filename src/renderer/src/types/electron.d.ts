@@ -96,7 +96,7 @@ export interface ElectronAPI {
       removeEdge: (payload: { mapId: string; nodeId: string; target: Partial<LearningEdge> }) => Promise<{ success: boolean; data?: LearningNode; error?: string }>
       setCanon: (payload: { mapId: string; canon: { scaleEstimate?: number; source?: string } }) => Promise<{ success: boolean; data?: LearningCanon; error?: string }>
       setCurrent: (payload: { mapId: string; nodeId: string }) => Promise<{ success: boolean; data?: LearningMap; error?: string }>
-      aiAsk: (payload: { requestId: string; kind: 'content' | 'ask' | 'drill' | 'quiz' | 'grade' | 'skeleton' | 'spread' | 'portal'; mapTitle?: string; nodePath?: string; nodeTitle: string; selection?: string; question?: string; content?: string; answers?: string; nodeDirectory?: string; description?: string; existingTitles?: string; siblingTitles?: string }) => Promise<{ success: boolean; error?: string }>
+      aiAsk: (payload: { requestId: string; kind: 'content' | 'ask' | 'drill' | 'quiz' | 'grade' | 'skeleton' | 'spread' | 'portal'; mapTitle?: string; nodePath?: string; nodeTitle: string; selection?: string; question?: string; content?: string; answers?: string; nodeDirectory?: string; outlineTitles?: string; description?: string; existingTitles?: string; siblingTitles?: string }) => Promise<{ success: boolean; error?: string }>
       aiAbort: (requestId: string) => Promise<{ success: boolean }>
       onAiChunk: (callback: (data: { requestId: string; delta: string; content: string }) => void) => () => void
       onAiEnd: (callback: (data: { requestId: string; success: boolean; content: string; error?: string }) => void) => () => void

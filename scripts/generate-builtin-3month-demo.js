@@ -26,19 +26,32 @@ const { MAP, USER_TRUNK, CANON, USER_ADDED, EDGES } = require('./builtin-agent-3
 const { QA, QUIZ } = require('./builtin-agent-3month/dialogue')
 
 const TARGET = path.join(__dirname, '../src/main/muse/builtin-learning-maps.demo.json')
-const CHAPTER_FILE = path.join(__dirname, 'builtin-agent-3month/chapters.md')
+const CHAPTER_DIR = path.join(__dirname, 'builtin-agent-3month')
 
 // 章节正文放在 markdown 数据文件里，而不是 JS 模板字符串：
 // 正文本身含大量代码围栏，写在模板字符串里需要转义反引号，维护成本高。
 // 格式：<!-- node: 节点id --> 后紧跟该节点正文，直到下一个标记。
+//
+// 正文按主题拆成 chapters.md + chapters-*.md 多个文件：单文件超过几万字以后
+// 增删一章的 diff 会牵连整份文件，评审和回滚都变难。
 function loadChapters() {
-  const parts = fs.readFileSync(CHAPTER_FILE, 'utf8').split(/^<!-- node: ([a-z0-9_]+) -->$/m)
+  const files = fs.readdirSync(CHAPTER_DIR)
+    .filter(name => name === 'chapters.md' || /^chapters-.+\.md$/.test(name))
+    .sort()
   const chapters = new Map()
-  for (let i = 1; i < parts.length; i += 2) chapters.set(parts[i], parts[i + 1].trim())
-  return chapters
+  for (const name of files) {
+    const raw = fs.readFileSync(path.join(CHAPTER_DIR, name), 'utf8')
+    const parts = raw.split(/^<!-- node: ([a-z0-9_]+) -->$/m)
+    for (let i = 1; i < parts.length; i += 2) {
+      const id = parts[i]
+      if (chapters.has(id)) fail(`章节 ${id} 在 ${name} 与另一个文件里重复定义`)
+      chapters.set(id, parts[i + 1].trim())
+    }
+  }
+  return { chapters, files }
 }
 
-const CHAPTERS = loadChapters()
+const { chapters: CHAPTERS, files: CHAPTER_FILES } = loadChapters()
 
 function fail(message) {
   console.error(`✗ ${message}`)

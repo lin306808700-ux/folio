@@ -44,6 +44,11 @@ canonical project map and only inspect the modules relevant to the current task.
   while the document is hidden.
 - Prefer quiet desktop-tool UI: 8px card radius, one primary action per page,
   restrained color, and no decorative permanent animation in content pages.
+- The learning node detail is a **centered window** (antd `Modal`, `centered`,
+  width 960), not a right-side drawer: reading is the primary activity there, so
+  the body scrolls independently and the reading column is capped at 780px and
+  centred inside it. Do not move it back to a side drawer or let prose span the
+  full window width.
 - Do not expose protocol payloads such as `ARTIFACT:`, `MUSE_TASK:`,
   `SCRIPT_BLOCK:`, or raw JSON in message bubbles.
 

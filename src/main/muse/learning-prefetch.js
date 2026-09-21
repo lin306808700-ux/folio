@@ -142,8 +142,35 @@ function emitStatus(extra = {}) {
   } catch (_) { /* 窗口状态竞态忽略 */ }
 }
 
-function recordFailure(nodeId) {
-  const record = _failures.get(nodeId) || { attempts: 0, until: 0 }
+// 全书目录（纯标题缩进树）。后台预生成与交互式撰写必须给模型同一份上下文：
+// 否则用户手动写的章节与后台写出来的章节，在「和邻章的分工」上会明显不一致。
+function buildOutlineTitles(map) {
+  const ids = new Set(map.nodes.map(node => node.id))
+  const byParent = new Map()
+  for (const node of map.nodes) {
+    const key = node.parentId && ids.has(node.parentId) ? node.parentId : null
+    byParent.set(key, [...(byParent.get(key) || []), node])
+  }
+  const lines = []
+  const walk = (parentId, level) => {
+    for (const node of byParent.get(parentId) || []) {
+      lines.push(`${'  '.repeat(level)}- ${node.title}`)
+      walk(node.id, level + 1)
+    }
+  }
+  walk(null, 0)
+  return lines.join('\n')
+}
+
+// 同层邻居：判断「这一章不要写成隔壁那一章」
+function buildSiblingTitles(map, node) {
+  return map.nodes
+    .filter(item => item.parentId === node.parentId && item.id !== node.id)
+    .map(item => `- ${item.title}`)
+    .join('\n')
+}
+
+function recordFailure(nodeId) {  const record = _failures.get(nodeId) || { attempts: 0, until: 0 }
   record.attempts += 1
   record.until = Date.now() + BACKOFF_STEP_MS * record.attempts
   _failures.set(nodeId, record)
@@ -163,6 +190,8 @@ async function generateOne(item) {
       mapTitle: item.mapTitle,
       nodePath: getNodePath(item.map, item.node.id),
       nodeTitle: item.node.title,
+      outlineTitles: buildOutlineTitles(item.map),
+      siblingTitles: buildSiblingTitles(item.map, item.node),
     })
     let content = ''
     for await (const frame of callAIStream(prompt, { signal: controller.signal, label: LABEL })) {

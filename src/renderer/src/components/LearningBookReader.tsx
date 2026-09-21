@@ -20,6 +20,8 @@ interface LearningBookReaderProps {
   prefetchCurrent: { mapId: string; nodeId: string; title: string } | null
   // 全书目录（验收批改时供 AI 从中推荐阅读引导）
   nodeDirectory: string
+  // 纯标题缩进树的全书目录：写章节时用，避免与邻章重复讲同一件事
+  outlineTitles?: string
   // 已存在的同层知识点（横向平铺时去重用）
   siblingTitles?: string
   onChanged: () => Promise<void>
@@ -175,7 +177,7 @@ function parseGradeResult(raw: string): { results: { pass: boolean; comment: str
  * - 章节正文（技术要点/讲解/代码实例）由 AI 按需撰写并持久化
  * - 圈选任意文字沿四个正交方向展开：提问 / 下钻（纵深）/ 平铺（同层）/ 跨域（门户）
  */
-const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, mapTitle, nodePath, prefetchCurrent, nodeDirectory, siblingTitles, onChanged, notify, onNavigate }) => {
+const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, mapTitle, nodePath, prefetchCurrent, nodeDirectory, outlineTitles, siblingTitles, onChanged, notify, onNavigate }) => {
   const [contentDraft, setContentDraft] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
   const [drilling, setDrilling] = useState(false)
@@ -460,7 +462,7 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [node.id])
 
-  const startRequest = async (kind: RequestKind, extra: { selection?: string; question?: string; content?: string; answers?: string; nodeDirectory?: string; siblingTitles?: string } = {}) => {
+  const startRequest = async (kind: RequestKind, extra: { selection?: string; question?: string; content?: string; answers?: string; nodeDirectory?: string; outlineTitles?: string; siblingTitles?: string } = {}) => {
     const id = makeRequestId()
     const ctx = ctxRef.current
     // 目标节点身份在发起请求时就固定下来，之后切节点也不会写错地方
@@ -476,6 +478,7 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
       content: extra.content,
       answers: extra.answers,
       nodeDirectory: extra.nodeDirectory,
+      outlineTitles: extra.outlineTitles,
       siblingTitles: extra.siblingTitles,
     })
     if (!result.success) {
@@ -491,7 +494,12 @@ const LearningBookReader: React.FC<LearningBookReaderProps> = ({ node, mapId, ma
     window.electronAPI.muse.learning.prefetchBump(mapId, node.id).catch(() => {})
     setContentDraft('')
     setGenerating(true)
-    const ok = await startRequest('content')
+    // 带上全书目录与同层邻居：没有邻章上下文，每一章都会把背景从零重讲一遍，
+    // 章节之间必然重叠，「结构完整」就无从谈起。
+    const ok = await startRequest('content', {
+      ...(outlineTitles ? { outlineTitles } : {}),
+      ...(siblingTitles ? { siblingTitles } : {}),
+    })
     if (!ok) {
       setContentDraft(null)
       setGenerating(false)

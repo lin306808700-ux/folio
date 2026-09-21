@@ -237,13 +237,17 @@ body {
   box-shadow: 0 0 20px rgba(88, 213, 186, 0.15), 0 0 40px rgba(88, 213, 186, 0.05);
 }
 
-/* 学习图谱书页：抽屉内收紧 MarkdownRenderer 排版密度 */
-.learning-book .prose h2 { font-size: 14px; margin-top: 14px; }
-.learning-book .prose h3 { font-size: 13px; margin-top: 10px; }
-.learning-book .prose h4 { font-size: 12px; }
+/* 学习图谱书页：正文列限宽居中后的阅读排版。
+   原来是 560px 抽屉里挤小字，现在是居中窗口里的阅读列，
+   字号与行距按「连续读 1000 字不累」来定。 */
+.learning-book .prose { font-size: 13.5px; line-height: 1.9; }
+.learning-book .prose h2 { font-size: 16px; margin-top: 20px; }
+.learning-book .prose h3 { font-size: 14px; margin-top: 16px; }
+.learning-book .prose h4 { font-size: 13px; }
 .learning-book .prose p,
-.learning-book .prose li { font-size: 12px; line-height: 1.8; }
-.learning-book .prose pre { font-size: 11px; }
+.learning-book .prose li { font-size: 13.5px; line-height: 1.9; }
+.learning-book .prose pre { font-size: 12.5px; line-height: 1.7; }
+.learning-book .prose table { font-size: 12.5px; }
 
 /* 学习知识树：展开箭头与节点标题严格垂直对齐，行高统一 */
 .learning-tree.ant-tree { font-size: 12px; }

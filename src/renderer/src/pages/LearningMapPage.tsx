@@ -4,7 +4,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Button, Card, Drawer, Dropdown, Empty, Form, Input, Modal, Segmented, Select, Spin, Switch, Steps, Tag, Tree, message,
+  Button, Card, Dropdown, Empty, Form, Input, Modal, Segmented, Select, Spin, Switch, Steps, Tag, Tree, message,
 } from 'antd'
 import {
   AimOutlined, AppstoreOutlined, CheckCircleOutlined, CompassOutlined, DeleteOutlined, EditOutlined,
@@ -62,10 +62,36 @@ function buildTree(nodes: LearningNodeMeta[]): TreeNodeData[] {
   return toData(null)
 }
 
-interface SkeletonBranch {
+interface SkeletonNode {
   title: string
   summary: string
-  children: { title: string; summary: string }[]
+  children: SkeletonNode[]
+}
+
+type SkeletonBranch = SkeletonNode
+
+// 骨架最多三层：领域 → 板块 → 知识点 → 细分。
+// 再深就不该由 AI 一次性铺出来了（那属于自己下钻的范畴），而且层级越深
+// 越容易凑数——「为凑层数而拆」正是骨架最容易失真的地方。
+const SKELETON_MAX_DEPTH = 3
+// 一次铺出的总量上限：提示词要 45-70，留出余量但不允许无界展开
+const SKELETON_MAX_NODES = 120
+
+function parseSkeletonNodes(raw: unknown, depth: number, budget: { left: number }): SkeletonNode[] {
+  if (depth > SKELETON_MAX_DEPTH || budget.left <= 0) return []
+  return (Array.isArray(raw) ? raw : [])
+    .filter((item): item is Record<string, unknown> =>
+      Boolean(item) && typeof (item as Record<string, unknown>).title === 'string')
+    .slice(0, Math.min(depth === 1 ? 10 : 8, budget.left))
+    .map(item => {
+      budget.left -= 1
+      return {
+        title: String(item.title).trim().slice(0, 120),
+        summary: String(item.summary || '').trim().slice(0, 500),
+        children: parseSkeletonNodes(item.children, depth + 1, budget),
+      }
+    })
+    .filter(node => node.title)
 }
 
 // 宽容解析领域骨架 JSON（容忍 ```json 围栏与多余文字）
@@ -74,23 +100,7 @@ function parseSkeleton(raw: string): { scaleEstimate: number; branches: Skeleton
   if (!match) return null
   try {
     const parsed = JSON.parse(match[0])
-    const branches = (Array.isArray(parsed?.branches) ? parsed.branches : [])
-      .filter((branch: unknown): branch is Record<string, unknown> =>
-        Boolean(branch) && typeof (branch as Record<string, unknown>).title === 'string')
-      .slice(0, 10)
-      .map((branch: Record<string, unknown>) => ({
-        title: String(branch.title).trim().slice(0, 120),
-        summary: String(branch.summary || '').trim().slice(0, 500),
-        children: (Array.isArray(branch.children) ? branch.children : [])
-          .filter((child: unknown): child is Record<string, unknown> =>
-            Boolean(child) && typeof (child as Record<string, unknown>).title === 'string')
-          .slice(0, 8)
-          .map((child: Record<string, unknown>) => ({
-            title: String(child.title).trim().slice(0, 120),
-            summary: String(child.summary || '').trim().slice(0, 500),
-          })),
-      }))
-      .filter((branch: SkeletonBranch) => branch.title)
+    const branches = parseSkeletonNodes(parsed?.branches, 1, { left: SKELETON_MAX_NODES })
     if (branches.length === 0) return null
     const scaleEstimate = Number.isFinite(Number(parsed?.scaleEstimate)) ? Math.round(Number(parsed.scaleEstimate)) : 0
     return { scaleEstimate, branches }
@@ -108,7 +118,7 @@ export default function LearningMapPage() {
   // 抽屉需要完整节点（正文/问答/验收记录），按需单取；列表只拿元数据
   const [detailNode, setDetailNode] = useState<LearningNode | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
-  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [detailOpen, setDetailOpen] = useState(false)
   const [editMode, setEditMode] = useState(false)
   const [viewMode, setViewMode] = useState<'mindmap' | 'board'>('mindmap')
   const [loading, setLoading] = useState(true)
@@ -133,24 +143,28 @@ export default function LearningMapPage() {
 
   const treeData = useMemo(() => (activeMap ? buildTree(activeMap.nodes) : []), [activeMap])
 
-  // 全书目录（验收批改时供 AI 推荐阅读引导）：带 nodeId，章节名可能重名或被改
-  const nodeDirectory = useMemo(() => {
-    if (!activeMap) return ''
+  // 全书目录有两份，用途不同：
+  //   nodeDirectory —— 带 nodeId，给验收批改用（引导要能定位到具体章节）
+  //   outlineTitles —— 纯标题缩进树，给章节撰写用（模型不需要看到内部 id，否则可能把它写进正文）
+  const { nodeDirectory, outlineTitles } = useMemo(() => {
+    if (!activeMap) return { nodeDirectory: '', outlineTitles: '' }
     const ids = new Set(activeMap.nodes.map(node => node.id))
     const byParent = new Map<string | null, LearningNodeMeta[]>()
     activeMap.nodes.forEach(node => {
       const key = node.parentId && ids.has(node.parentId) ? node.parentId : null
       byParent.set(key, [...(byParent.get(key) || []), node])
     })
-    const lines: string[] = []
+    const withIds: string[] = []
+    const titlesOnly: string[] = []
     const walk = (parentId: string | null, level: number) => {
       for (const node of byParent.get(parentId) || []) {
-        lines.push(`${'  '.repeat(level)}- [${node.id}] ${node.title}`)
+        withIds.push(`${'  '.repeat(level)}- [${node.id}] ${node.title}`)
+        titlesOnly.push(`${'  '.repeat(level)}- ${node.title}`)
         walk(node.id, level + 1)
       }
     }
     walk(null, 0)
-    return lines.join('\n')
+    return { nodeDirectory: withIds.join('\n'), outlineTitles: titlesOnly.join('\n') }
   }, [activeMap])
 
   // 骨架节点数：分母。没有骨架的图谱（含内置演示图谱）退化为全部节点
@@ -242,25 +256,27 @@ export default function LearningMapPage() {
       }
       const api = window.electronAPI.muse.learning
       let created = 0
-      for (const branch of parsed.branches) {
-        const branchResult = await api.addNode({
-          mapId: pending.mapId, parentId: pending.rootId,
-          title: branch.title, summary: branch.summary, origin: 'canon',
-        })
-        if (!branchResult.success || !branchResult.data) continue
-        created += 1
-        if (branch.children.length === 0) continue
-        const childResult = await api.addNodes({
+      // 递归写入：骨架可以有三层，逐层建完父节点再挂子节点（子节点需要父节点 id）
+      const insert = async (parentId: string, siblings: SkeletonNode[]): Promise<void> => {
+        if (siblings.length === 0) return
+        const result = await api.addNodes({
           mapId: pending.mapId,
-          items: branch.children.map(child => ({
-            parentId: branchResult.data!.id,
-            title: child.title,
-            summary: child.summary,
+          items: siblings.map(node => ({
+            parentId,
+            title: node.title,
+            summary: node.summary,
             origin: 'canon' as const,
           })),
         })
-        if (childResult.success) created += childResult.data?.length || 0
+        if (!result.success) return
+        const written = result.data || []
+        created += written.length
+        // addNodes 按入参顺序创建，返回顺序与之一致，因此可以按下标对应回原结构
+        for (let index = 0; index < written.length; index += 1) {
+          await insert(written[index].id, siblings[index].children)
+        }
       }
+      await insert(pending.rootId, parsed.branches)
       if (created === 0) {
         messageApi.error('骨架未能写入')
         return
@@ -285,10 +301,10 @@ export default function LearningMapPage() {
   }, [])
 
   useEffect(() => {
-    if (!drawerOpen || !activeMap || !selectedNodeId) return
+    if (!detailOpen || !activeMap || !selectedNodeId) return
     loadDetail(activeMap.id, selectedNodeId).catch(() => {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drawerOpen, activeMap?.id, selectedNodeId])
+  }, [detailOpen, activeMap?.id, selectedNodeId])
 
   // 后台预生成状态：顶栏徽标展示；预制完成当前打开的章节时自动刷新
   const selectedNodeIdRef = useRef(selectedNodeId)
@@ -315,7 +331,7 @@ export default function LearningMapPage() {
 
   // 打开节点详情抽屉时同步表单
   useEffect(() => {
-    if (!drawerOpen || !detailNode) return
+    if (!detailOpen || !detailNode) return
     nodeForm.setFieldsValue({
       title: detailNode.title,
       status: detailNode.status,
@@ -324,11 +340,11 @@ export default function LearningMapPage() {
       nextStep: detailNode.nextStep || '',
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drawerOpen, detailNode?.id, detailNode?.updatedAt])
+  }, [detailOpen, detailNode?.id, detailNode?.updatedAt])
 
   // 切换节点：编辑态不跨节点残留；有未保存修改先确认，避免静默丢弃
   const openNode = async (nodeId: string) => {
-    if (drawerOpen && editMode && selectedNodeId !== nodeId) {
+    if (detailOpen && editMode && selectedNodeId !== nodeId) {
       if (nodeForm.isFieldsTouched()) {
         const confirmed = await new Promise<boolean>(resolve => {
           Modal.confirm({
@@ -346,11 +362,11 @@ export default function LearningMapPage() {
       setEditMode(false)
     }
     if (selectedNodeId === nodeId) {
-      setDrawerOpen(true)
+      setDetailOpen(true)
       return
     }
     setSelectedNodeId(nodeId)
-    setDrawerOpen(true)
+    setDetailOpen(true)
   }
 
   // 验收引导跳转：优先按 nodeId 定位，历史记录退回按章节名匹配
@@ -449,7 +465,7 @@ export default function LearningMapPage() {
           messageApi.error(result.error || '删除失败')
           return
         }
-        setDrawerOpen(false)
+        setDetailOpen(false)
         await loadMaps()
         messageApi.success('图谱已删除')
       },
@@ -488,7 +504,7 @@ export default function LearningMapPage() {
         cancelText: '取消',
         onOk: async () => {
           await window.electronAPI.muse.learning.deleteMap(activeMap.id)
-          setDrawerOpen(false)
+          setDetailOpen(false)
           await loadMaps()
         },
       })
@@ -517,7 +533,7 @@ export default function LearningMapPage() {
           messageApi.error(result.error || '删除失败')
           return
         }
-        setDrawerOpen(false)
+        setDetailOpen(false)
         setEditMode(false)
         await loadMaps(activeMap.id, node.parentId || activeMap.currentNodeId)
         messageApi.success('节点已删除')
@@ -611,10 +627,11 @@ export default function LearningMapPage() {
     if (key === 'delete') deleteNode(node.id)
   }
 
-  const drawerNode = detailNode
+  // 详情窗口里正在展示的节点：与选中节点区分，避免切换选择时正文闪空
+  const viewNode = detailNode
   const verifiedCount = counts.verified
   const understoodOnly = counts.understood
-  const hasEvidence = Boolean(drawerNode?.evidence && drawerNode.evidence.trim())
+  const hasEvidence = Boolean(viewNode?.evidence && viewNode.evidence.trim())
 
   return (
     <PageShell
@@ -884,29 +901,44 @@ export default function LearningMapPage() {
         </div>
       )}
 
-      {/* 节点详情抽屉：阅读模式主打「看书学」，编辑模式维护内容 */}
-      <Drawer
-        title={drawerNode ? drawerNode.title : (selectedNode ? selectedNode.title : '节点详情')}
-        width={560}
-        open={drawerOpen}
-        onClose={() => { setDrawerOpen(false); setEditMode(false) }}
-        footer={detailLoading || !drawerNode ? null : editMode ? (
+      {/* 节点详情：居中窗口。阅读模式下正文列限宽居中，保证行长可读；
+          窗口本身居中定位，不再贴右侧。正文区独立滚动，前后编辑区固定。 */}
+      <Modal
+        centered
+        width={960}
+        open={detailOpen}
+        maskClosable={false}
+        onCancel={() => { setDetailOpen(false); setEditMode(false) }}
+        title={(
+          <div className="pr-6">
+            <div className="text-sm font-semibold text-text-primary">
+              {viewNode ? viewNode.title : (selectedNode ? selectedNode.title : '节点详情')}
+            </div>
+            {selectedPath.length > 1 && (
+              <div className="mt-0.5 truncate text-[11px] font-normal text-text-faint">
+                {selectedPath.slice(0, -1).map(node => node.title).join(' / ')}
+              </div>
+            )}
+          </div>
+        )}
+        styles={{ body: { maxHeight: 'calc(100vh - 232px)', overflowY: 'auto', paddingTop: 4 } }}
+        footer={detailLoading || !viewNode ? null : editMode ? (
           <div className="flex justify-end gap-2">
             <Button onClick={() => setEditMode(false)}>取消</Button>
             <Button type="primary" loading={saving} icon={<SaveOutlined />} onClick={saveNode}>保存节点</Button>
           </div>
         ) : (
           <div className="flex flex-wrap justify-end gap-2">
-            <Button danger type="text" icon={<DeleteOutlined />} disabled={!drawerNode.parentId} onClick={() => deleteNode(drawerNode.id)}>删除</Button>
+            <Button danger type="text" icon={<DeleteOutlined />} disabled={!viewNode.parentId} onClick={() => deleteNode(viewNode.id)}>删除</Button>
             <Button icon={<EditOutlined />} onClick={() => setEditMode(true)}>编辑</Button>
             <Button type="primary" icon={<MessageOutlined />} onClick={continueInChat}>围绕此节点继续对话</Button>
           </div>
         )}
       >
-        {detailLoading || !drawerNode ? (
+        {detailLoading || !viewNode ? (
           <div className="flex h-40 items-center justify-center"><Spin /></div>
         ) : editMode ? (
-          <>
+          <div className="mx-auto w-full max-w-[780px]">
             <Steps
               size="small"
               className="mb-6"
@@ -930,33 +962,33 @@ export default function LearningMapPage() {
                 <Input.TextArea rows={3} placeholder="下一次回来时从哪里继续，或需要补哪一个前置知识。" />
               </Form.Item>
             </Form>
-          </>
+          </div>
         ) : (
-          <>
+          <div className="mx-auto w-full max-w-[780px]">
             <div className="flex flex-wrap items-center gap-1.5">
-              <Tag color={statusMeta(drawerNode.status).tag}>{statusMeta(drawerNode.status).label}</Tag>
-              {drawerNode.status === 'verified' && (
-                <Tag color={drawerNode.verifiedBy === 'quiz' ? 'green' : 'default'}>
-                  {verifiedSourceLabel(drawerNode.verifiedBy)}
+              <Tag color={statusMeta(viewNode.status).tag}>{statusMeta(viewNode.status).label}</Tag>
+              {viewNode.status === 'verified' && (
+                <Tag color={viewNode.verifiedBy === 'quiz' ? 'green' : 'default'}>
+                  {verifiedSourceLabel(viewNode.verifiedBy)}
                 </Tag>
               )}
-              {drawerNode.id === activeMap?.currentNodeId && (
+              {viewNode.id === activeMap?.currentNodeId && (
                 <Tag icon={<AimOutlined />} style={{ color: CURRENT_MARKER_COLOR, borderColor: CURRENT_MARKER_COLOR }}>
                   当前位置
                 </Tag>
               )}
               {activeMap?.builtIn && <Tag color="purple">内置知识</Tag>}
             </div>
-            <div className="mt-2 text-[11px] text-text-faint">{selectedPath.map(node => node.title).join(' / ')}</div>
+            {/* 路径已移到窗口标题栏，正文区不再重复 */}
 
             {/* 第 2 层：连接边。树只表达「属于」，横向的同类与通往别处的大门靠边来表达 */}
-            {(drawerNode.edges || []).length > 0 && (
+            {(viewNode.edges || []).length > 0 && (
               <div className="mt-4 rounded-lg border border-border-subtle/60 px-3 py-2.5">
                 <div className="flex items-center gap-1.5 text-[10px] font-semibold text-text-faint">
                   <GatewayOutlined />知识连接
                 </div>
                 <div className="mt-2 flex flex-col gap-2">
-                  {(drawerNode.edges || []).map((edge, index) => {
+                  {(viewNode.edges || []).map((edge, index) => {
                     const peer = edge.targetNodeId
                       ? activeMap?.nodes.find(item => item.id === edge.targetNodeId) || null
                       : null
@@ -995,7 +1027,7 @@ export default function LearningMapPage() {
                             className="ml-auto"
                             icon={<DeleteOutlined />}
                             title="删除这条连接"
-                            onClick={() => dropEdge(drawerNode.id, edge)}
+                            onClick={() => dropEdge(viewNode.id, edge)}
                           />
                         </div>
                         {edge.note && <div className="mt-0.5 text-[10px] text-text-faint">{edge.note}</div>}
@@ -1007,7 +1039,7 @@ export default function LearningMapPage() {
             )}
 
             {/* 已验证但没留证据：自己标的「已验证」不该悄悄蒙混过关 */}
-            {drawerNode.status === 'verified' && !hasEvidence && (
+            {viewNode.status === 'verified' && !hasEvidence && (
               <div className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-[11px] leading-5 text-text-muted">
                 这个节点标为「已验证」但还没有掌握证据。补一条独立复述、答题或实践结果，这个状态才站得住。
               </div>
@@ -1016,27 +1048,28 @@ export default function LearningMapPage() {
             {/* 活的书：章节正文 + 圈选提问 + 四个方向的展开 */}
             <div className="mt-4">
               <LearningBookReader
-                node={drawerNode as any}
+                node={viewNode as any}
                 mapId={activeMap!.id}
                 mapTitle={activeMap!.title}
                 nodePath={selectedPath.map(item => item.title).join(' > ')}
                 prefetchCurrent={prefetch?.current || null}
                 nodeDirectory={nodeDirectory}
+                outlineTitles={outlineTitles}
                 siblingTitles={activeMap!.nodes
-                  .filter(item => item.parentId === drawerNode.parentId && item.id !== drawerNode.id)
+                  .filter(item => item.parentId === viewNode.parentId && item.id !== viewNode.id)
                   .map(item => `- ${item.title}`)
                   .join('\n')}
-                onChanged={() => refresh(activeMap!.id, drawerNode.id)}
+                onChanged={() => refresh(activeMap!.id, viewNode.id)}
                 notify={(type, text) => messageApi[type](text)}
                 onNavigate={navigateToGuide}
               />
             </div>
 
             <Card size="small" className="mt-3 bg-transparent" title={<span className="flex items-center gap-2 text-xs"><CheckCircleOutlined className="text-emerald-500" />掌握证据</span>}>
-              <p className="whitespace-pre-wrap text-xs leading-6 text-text-secondary">{drawerNode.evidence || '记录一次独立复述、答题、代码实践或纠错结果。'}</p>
+              <p className="whitespace-pre-wrap text-xs leading-6 text-text-secondary">{viewNode.evidence || '记录一次独立复述、答题、代码实践或纠错结果。'}</p>
             </Card>
             <Card size="small" className="mt-3 bg-transparent" title={<span className="flex items-center gap-2 text-xs"><CompassOutlined className="text-amber-500" />下一步</span>}>
-              <p className="whitespace-pre-wrap text-xs leading-6 text-text-secondary">{drawerNode.nextStep || '下一次回来时从哪里继续，或需要补哪一个前置知识。'}</p>
+              <p className="whitespace-pre-wrap text-xs leading-6 text-text-secondary">{viewNode.nextStep || '下一次回来时从哪里继续，或需要补哪一个前置知识。'}</p>
             </Card>
 
             <div className="mt-5 border-t border-border-subtle/50 pt-4">
@@ -1046,18 +1079,18 @@ export default function LearningMapPage() {
                   <Button
                     key={status}
                     size="small"
-                    type={drawerNode.status === status ? 'primary' : 'default'}
+                    type={viewNode.status === status ? 'primary' : 'default'}
                     onClick={() => quickUpdateStatus(status)}
                   >{LEARNING_STATUS_META[status].label}</Button>
                 ))}
               </div>
             </div>
-            {activeMap && drawerNode.id !== activeMap.currentNodeId && (
-              <Button block className="mt-4" icon={<AimOutlined />} onClick={() => markCurrent(drawerNode.id)}>设为当前位置</Button>
+            {activeMap && viewNode.id !== activeMap.currentNodeId && (
+              <Button block className="mt-4" icon={<AimOutlined />} onClick={() => markCurrent(viewNode.id)}>设为当前位置</Button>
             )}
-          </>
+          </div>
         )}
-      </Drawer>
+      </Modal>
 
       {/* 新建图谱 */}
       <Modal

@@ -56,6 +56,44 @@ function run() {
     '应存在「有正文但未探索」的节点，与 computeProgress 的口径保持一致',
   )
 
+  // —— 骨架必须是「完整结构」，不能是一份随手列出的清单 ——
+  // 骨架就是分母。骨架不完整时，覆盖度与色块都只是比例尺错的仪表盘：
+  // 早期版本只铺了 30 个知识点，覆盖度看着很高，那是分母太小而不是学得好。
+  assert.ok(
+    canonNodes.length >= 45,
+    `骨架规模过小（${canonNodes.length}），覆盖度会因分母偏小而虚高；领域骨架应覆盖完整主线`,
+  )
+  const branches = canonNodes.filter(node => node.parentId === map.nodes.find(item => item.parentId === null).id)
+  assert.ok(branches.length >= 6, `一级板块只有 ${branches.length} 个，结构不够完整`)
+
+  // scaleEstimate 是领域真实规模的估计，必须大于本次铺出的节点数：
+  // 否则等于宣称「骨架就是领域全貌」，那是另一种形式的失真。
+  assert.ok(
+    map.canon.scaleEstimate > canonNodes.length,
+    'AI 对领域规模的估计应大于本次铺出的节点数，骨架本身也是不完整的',
+  )
+
+  // 至少有一个板块完全空白——这是骨架存在的意义所在：
+  // 「你已经走到哪」永远不如「这里还有一整块你没想到」有价值。
+  const blankBranches = branches.filter(branch =>
+    !map.nodes.some(node => node.parentId === branch.id && node.status !== 'unexplored'))
+  assert.ok(
+    blankBranches.length >= 1,
+    '示例里至少要保留一个完全未触及的板块，否则看不出「骨架揭示了空白」这件事',
+  )
+
+  // —— 完整性：不允许悬空边与孤儿节点 ——
+  const ids = new Set(map.nodes.map(node => node.id))
+  for (const node of map.nodes) {
+    if (node.parentId) assert.ok(ids.has(node.parentId), `节点 ${node.id} 的父节点不存在`)
+    for (const edge of node.edges) {
+      if (edge.targetNodeId) {
+        assert.ok(ids.has(edge.targetNodeId), `节点 ${node.id} 有一条悬空边指向 ${edge.targetNodeId}`)
+        assert.notEqual(edge.targetNodeId, node.id, `节点 ${node.id} 出现自环边`)
+      }
+    }
+  }
+
   // —— 相对时间：必须物化成「距今 N 天」的真实时刻 ——
   const now = Date.now()
   for (const node of map.nodes) {
