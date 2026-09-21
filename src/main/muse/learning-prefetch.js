@@ -17,6 +17,7 @@
 // - 整条管线受本地偏好开关控制，用户关掉即停。
 
 const { callAIStream, isAiBusy, abortCallsByLabel } = require('../../shared/ai-client')
+const { isProviderErrorText } = require('../../shared/ai-error')
 const { buildLearningPrompt } = require('./learning-prompts')
 const { getSettings } = require('./learning-settings')
 const learningMaps = require('./learning-maps').store
@@ -169,7 +170,13 @@ async function generateOne(item) {
     }
     // 被交互请求抢占中断 → 不算失败、不落盘，下一轮队列仍在，稍后重试
     if (controller.signal.aborted) return
-    if (content && content.trim()) {
+    // 上游偶发把额度/鉴权错误当正文吐出来。这类文本一旦落盘就成了一段不可读的
+    // 「章节」，而且 content 非空会让队列判定它「已写好」，永远不再重试。
+    // 所以按失败处理：记退避，留待恢复后重跑。
+    if (isProviderErrorText(content)) {
+      console.warn(`[LearningPrefetch] ${item.node.title} 返回的是上游报错，已丢弃`)
+      recordFailure(item.node.id)
+    } else if (content && content.trim()) {
       learningMaps.updateNode(item.mapId, item.node.id, { content })
       _failures.delete(item.node.id)
       _doneSession += 1

@@ -21,6 +21,7 @@ const { StringDecoder } = require('string_decoder')
 const { spawn } = require('child_process')
 const fs = require('fs')
 const path = require('path')
+const { isProviderErrorText } = require('./ai-error')
 
 // ========== .env 文件加载（零依赖）==========
 
@@ -350,6 +351,17 @@ function isQoderLoginError(text) {
   return !!text && text.length < 120 && /not logged in|please run .?\/login/i.test(text)
 }
 
+/**
+ * 额度耗尽 / 鉴权失败时，qodercli 会把错误写到 stdout。流式读取时它与正常输出
+ * 无从区分，会被当成正文一路传下去，落盘后就成了一段不可读的「章节」。
+ * 这里统一转成异常，避免上层把「一次失败的调用」当成「一次成功的生成」。
+ */
+function assertNotProviderError(text) {
+  if (isProviderErrorText(text)) {
+    throw new Error(`模型调用失败：${text.slice(0, 200)}`)
+  }
+}
+
 async function callQoder(question, options = {}) {
   const { timeout = 300000, signal, label } = options
   const { child, waitExit } = spawnQoder(question)
@@ -369,6 +381,7 @@ async function callQoder(question, options = {}) {
     if (signal?.aborted) throw new Error('AI 调用已中断')
     const content = stripThinkingTags(stdout)
     if (isQoderLoginError(content)) throw new Error('qodercli 未登录，请先在终端执行 qodercli login')
+    assertNotProviderError(content)
     if (!content && code !== 0) {
       throw new Error(`qodercli 执行失败（exit ${code}）：${(stderr || '').slice(0, 200)}`)
     }
@@ -421,6 +434,9 @@ async function* callQoderStream(question, options = {}) {
     const { code, stderr } = await exitPromise.catch(e => ({ code: 1, stderr: e.message }))
     const content = stripThinkingTags(fullContent)
     if (isQoderLoginError(content)) throw new Error('qodercli 未登录，请先在终端执行 qodercli login')
+    // 必须在 yield streamEnd 之前抛：消费方（学习图谱预生成 / 章节撰写）都是
+    // 累积到流结束才落盘，抛异常才能让这次调用被记为失败而不是一次成功的生成。
+    assertNotProviderError(content)
     if (!content && code !== 0) {
       throw new Error(stderr || `qodercli 执行失败（exit ${code}）`)
     }

@@ -224,4 +224,57 @@ function runModelChecks() {
   console.log('learning map model checks passed')
 }
 
+// 上游把额度/鉴权错误写到 stdout 时，它会以「正文」的形式落盘。这种脏数据非空，
+// 于是被判定为「已写好」，**永久挡住种子回填** —— 内置演示图谱的 16 个节点就这么坏过。
+// 这里锁两件事：种子必须能修复它，且绝不碰用户手写的正文。
+function runSeedRepairChecks() {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'muse-seed-repair-'))
+  const filePath = path.join(tempDir, 'maps.json')
+
+  const providerError = 'Qoder API error: FORBIDDEN - {"code":"112","message":"{\\"pricingUrl\\":\\"https://qoder.com/pricing?client=qoder\\"}"}'
+  const iso = new Date().toISOString()
+
+  // 直接落一份「用户机器上已经存在一段时间」的本地数据
+  fs.writeFileSync(filePath, JSON.stringify([{
+    id: 'builtin_map',
+    title: '内置图谱',
+    builtIn: true,
+    currentNodeId: 'a',
+    createdAt: iso,
+    updatedAt: iso,
+    nodes: [
+      { id: 'a', parentId: null, title: '被污染', status: 'unexplored', content: providerError, createdAt: iso, updatedAt: iso },
+      { id: 'b', parentId: 'a', title: '用户手写', status: 'learning', content: '我自己整理的笔记，讲 403 FORBIDDEN 与 401 的区别。', createdAt: iso, updatedAt: iso },
+      { id: 'c', parentId: 'a', title: '缺正文', status: 'unexplored', createdAt: iso, updatedAt: iso },
+    ],
+  }]), 'utf8')
+
+  const seed = {
+    id: 'builtin_map',
+    title: '内置图谱',
+    builtIn: true,
+    currentNodeId: 'a',
+    canon: { generatedAt: '', scaleEstimate: 0, source: 'ai' },
+    nodes: [
+      { id: 'a', parentId: null, title: '被污染', status: 'unexplored', origin: 'canon', content: '正确的正文 A' },
+      { id: 'b', parentId: 'a', title: '用户手写', status: 'learning', origin: 'user', content: '种子里的正文 B' },
+      { id: 'c', parentId: 'a', title: '缺正文', status: 'unexplored', origin: 'canon', content: '正确的正文 C' },
+    ],
+  }
+
+  const store = createLearningMapStore(filePath)
+  store.seedBuiltinMaps([seed], [])
+  const byId = new Map(store.get('builtin_map').nodes.map(node => [node.id, node]))
+
+  assert.equal(byId.get('a').content, '正确的正文 A', '被上游报错污染的正文必须被种子修复')
+  assert.equal(byId.get('c').content, '正确的正文 C', '缺正文的节点应被回填')
+  assert.match(byId.get('b').content, /我自己整理的笔记/, '用户手写的正文不能被种子覆盖')
+  assert.ok(!byId.get('b').content.includes('种子里的正文'), '用户正文不应被种子的同 id 内容替换')
+
+  fs.rmSync(tempDir, { recursive: true, force: true })
+  console.log('learning seed repair checks passed')
+}
+
+run()
 runModelChecks()
+runSeedRepairChecks()

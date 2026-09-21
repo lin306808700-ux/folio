@@ -179,6 +179,21 @@ rules above. The model itself is specified in
   `unexplored` nodes on purpose, so **never infer progress from body presence**.
   The bundled demo bakes bodies for all 52 nodes (empty prefetch queue), which is
   what keeps the sample complete in environments with no AI access.
+- Provider failures can arrive as **plain stdout text**. `qodercli` writes quota
+  and auth errors to stdout (`Qoder API error: FORBIDDEN - {…}`), which a naive
+  stream reader cannot tell apart from model output. `src/shared/ai-error.js`
+  holds the single predicate for that shape:
+  - `model-provider.js` turns it into a thrown error (in both the one-shot and
+    streaming Qoder paths), so a failed call can never look like a success.
+  - `learning-prefetch.js` drops it and records a failure instead of persisting.
+  - `seedBuiltinMaps` treats stored pollution as “no content”, so a seed can
+    repair it — otherwise the non-empty garbage permanently blocks the backfill.
+  The predicate is deliberately length-capped and narrow: it must never match
+  real prose (a chapter explaining `403 FORBIDDEN` is not an error).
+- Requiring `learning-maps.js` seeds the built-in maps as a **module side
+  effect**. It is skipped under `node:test` (guarded by `NODE_TEST_CONTEXT`) so
+  running the suite never rewrites the developer's real
+  `~/.folio/muse/learning-maps.json`.
 - `addNodes` exists because skeleton generation inserts tens of nodes at once;
   do not loop `addNode` over IPC for that. It skips items whose parent is
   missing and throws when nothing valid remains.

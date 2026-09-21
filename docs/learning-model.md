@@ -153,10 +153,34 @@ decay   = max(0.5, 0.5 ^ (距上次复习天数 / 60))
   当复习时刻，否则老图谱一开箱就集体过期。
 - **正文与状态是解耦的两件事**：`content` 表示「这一页已经写好了」，
   `status` 表示「我学到哪一步了」，两者互不推导。内置示例给全部 52 个节点都预置了正文，
-  其中 14 个骨架节点的 `status` 仍是 `unexplored` —— 这正是后台预生成管线的正常产物
+  其中 16 个骨架节点的 `status` 仍是 `unexplored` —— 这正是后台预生成管线的正常产物
   （`buildQueue` 的判据是 `!content`，不看状态与来源）。
   这样做的实际收益是：示例在**完全无法调用 AI 的环境**下依然完整，
   不会出现点开是空页、或按钮必然失败的节点；而覆盖度只认状态，预置正文不会让它虚高。
+
+### 一个真实踩过的坑：报错被当成正文落盘
+
+额度耗尽或鉴权失败时，`qodercli` 会把错误写进 **stdout**：
+
+```
+Qoder API error: FORBIDDEN - {"code":"112","message":"{\"pricingUrl\":\"…\"}"}
+```
+
+流式读取时它与正常输出无从区分，于是被当作正文一路传下去，最后落进 `content`。
+这造成过一个连锁故障，现在由三层共同兜住：
+
+| 层 | 措施 |
+| --- | --- |
+| `model-provider.js` | 用 `src/shared/ai-error.js` 的判据识别并**抛错**，让失败的调用不再表现为成功 |
+| `learning-prefetch.js` | 落盘前再判一次，命中就丢弃并按失败退避，留待恢复后重跑 |
+| `seedBuiltinMaps` | 把「命中判据的正文」视同没有正文，使内置种子能够**修复**已污染的数据 |
+
+第三层是必需的：那段垃圾**非空**，只会被当成「已写好」，从而永久挡住种子回填 ——
+演示图谱就曾有 16 个节点卡在这个状态里，界面显示的是报错而不是章节。
+
+判据本身刻意收得很紧（长度上限 400 字 + 窄特征），因为它的错误方向不对称：
+漏判只是少拦一次，误判会丢掉正常生成的内容、甚至覆盖用户手写的笔记。
+所以「讲 403 FORBIDDEN 的章节」必须不被判为报错 —— 这条有单测守着。
 - 重新生成：`node scripts/generate-builtin-3month-demo.js`，数据源在
   `scripts/builtin-agent-3month/`（`outline.js` 树与时间线、`chapters.md` 正文、
   `dialogue.js` 问答与验收）。生成脚本会复用上一版文件里的既有正文，可重复执行。
@@ -165,6 +189,6 @@ decay   = max(0.5, 0.5 ^ (距上次复习天数 / 60))
 ## 验证
 
 ```bash
-npm test          # 含 learning-maps.test.js 与 learning-seeds.test.js
+npm test          # 含 learning-maps.test.js、learning-seeds.test.js 与 ai-error.test.js
 npm run check     # 语法检查 + 全量测试 + 前端构建
 ```

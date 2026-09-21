@@ -6,6 +6,8 @@
 const fs = require('fs')
 const path = require('path')
 const { MUSE_HOME } = require('./config')
+// 内置种子的回填需要分清「用户写的正文」和「上游报错留下的垃圾」，见 seedBuiltinMaps
+const { isProviderErrorText } = require('../../shared/ai-error')
 
 const LEARNING_MAPS_FILE = path.join(MUSE_HOME, 'learning-maps.json')
 const NODE_STATUSES = new Set(['unexplored', 'learning', 'understood', 'verified'])
@@ -216,15 +218,25 @@ function createLearningMapStore(filePath = LEARNING_MAPS_FILE) {
     }
     const missing = seeds.filter(seed => !maps.some(map => map.id === seed.id))
     let backfilled = 0
+    let repaired = 0
     for (const seed of seeds) {
       const map = maps.find(m => m.id === seed.id)
       if (!map || !Array.isArray(map.nodes)) continue
       const seedNodes = new Map(seed.nodes.map(n => [n.id, n]))
       for (const node of map.nodes) {
         const seedNode = seedNodes.get(node.id)
-        if (seedNode && !(node.content && node.content.trim()) && seedNode.content) {
-          node.content = seedNode.content
-          backfilled += 1
+        // 两种情况下种子正文都该胜出：
+        //   1. 本地还没有正文（首次回填）
+        //   2. 本地「正文」其实是上一次调用失败留下的报错文本 —— 它非空，会被
+        //      当成已写好，从而永久挡住回填。上游额度耗尽时踩过这个坑。
+        if (seedNode && seedNode.content) {
+          const blank = !(node.content && node.content.trim())
+          const polluted = !blank && isProviderErrorText(node.content)
+          if (blank || polluted) {
+            node.content = seedNode.content
+            backfilled += 1
+            if (polluted) repaired += 1
+          }
         }
         seedNodes.delete(node.id)
       }
@@ -241,7 +253,7 @@ function createLearningMapStore(filePath = LEARNING_MAPS_FILE) {
       console.log(`[Muse] 已注入内置学习图谱: ${missing.map(m => m.title).join('、')}`)
     }
     if (backfilled > 0) {
-      console.log(`[Muse] 内置图谱正文回填 ${backfilled} 个节点`)
+      console.log(`[Muse] 内置图谱正文回填 ${backfilled} 个节点${repaired > 0 ? `（其中 ${repaired} 个是修复被上游报错污染的正文）` : ''}`)
     }
   }
 
@@ -639,12 +651,19 @@ function createLearningMapStore(filePath = LEARNING_MAPS_FILE) {
 }
 
 const defaultStore = createLearningMapStore()
-// 应用启动即注入内置知识图谱（前端/服务端），提供「看书学」的开箱路径
-try {
-  const { BUILTIN_MAPS, DEPRECATED_BUILTIN_IDS } = require('./learning-seeds')
-  defaultStore.seedBuiltinMaps(BUILTIN_MAPS, DEPRECATED_BUILTIN_IDS)
-} catch (error) {
-  console.warn('[Muse] 内置学习图谱注入失败:', error.message)
+// 应用启动即注入内置知识图谱（前端/服务端），提供「看书学」的开箱路径。
+//
+// 但测试进程必须跳过：测试会 require 本模块，若照常注入，跑一次 `npm test` 就会
+// **改写开发者本机的真实学习数据**。这不是理论风险 —— 内置示例被上游报错污染过 16 个
+// 节点，而修复那次正是在 `npm test` 期间被这个副作用顺手写回本机文件的。
+// NODE_TEST_CONTEXT 由 node:test 在子进程中设置，是这里最可靠的判据。
+if (!process.env.NODE_TEST_CONTEXT) {
+  try {
+    const { BUILTIN_MAPS, DEPRECATED_BUILTIN_IDS } = require('./learning-seeds')
+    defaultStore.seedBuiltinMaps(BUILTIN_MAPS, DEPRECATED_BUILTIN_IDS)
+  } catch (error) {
+    console.warn('[Muse] 内置学习图谱注入失败:', error.message)
+  }
 }
 
 module.exports = {
