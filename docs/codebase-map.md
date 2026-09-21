@@ -172,7 +172,13 @@ rules above. The model itself is specified in
   renamed or duplicated.
 - Background chapter prefetch is a user-visible capability: it is gated by
   `learning-settings.js`, per-node failures back off and are eventually skipped
-  rather than blocking the queue head.
+  rather than blocking the queue head. Its queue predicate is `!content` — it
+  ignores `status` and `origin` deliberately.
+- `content` and `status` are independent facts: `content` means “this page is
+  written”, `status` means “how far I have studied”. Prefetch writes bodies for
+  `unexplored` nodes on purpose, so **never infer progress from body presence**.
+  The bundled demo bakes bodies for all 52 nodes (empty prefetch queue), which is
+  what keeps the sample complete in environments with no AI access.
 - `addNodes` exists because skeleton generation inserts tens of nodes at once;
   do not loop `addNode` over IPC for that. It skips items whose parent is
   missing and throws when nothing valid remains.

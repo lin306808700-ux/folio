@@ -41,6 +41,21 @@ function run() {
   // 已验证节点必须有归因，否则界面上会显示「未记录依据」
   assert.ok(map.nodes.filter(node => node.status === 'verified').every(node => node.verifiedBy))
 
+  // —— 正文必须齐全：示例要在完全无法调用 AI 的环境下可用 ——
+  // 缺一章就意味着用户点开是空页、或一个必然失败的生成按钮。
+  const withoutContent = map.nodes.filter(node => !(node.content && node.content.trim()))
+  assert.equal(
+    withoutContent.length,
+    0,
+    `内置示例存在没有正文的节点：${withoutContent.map(node => node.id).join(', ')}`,
+  )
+  // 但正文与状态解耦：未探索节点同样可以有正文，这是后台预生成的正常产物，
+  // 也正是「不能用正文判定覆盖度」这条口径存在的原因。
+  assert.ok(
+    map.nodes.some(node => node.status === 'unexplored' && node.content.trim()),
+    '应存在「有正文但未探索」的节点，与 computeProgress 的口径保持一致',
+  )
+
   // —— 相对时间：必须物化成「距今 N 天」的真实时刻 ——
   const now = Date.now()
   for (const node of map.nodes) {
